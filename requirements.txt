@@ -1,0 +1,26 @@
+# Core Framework & LLM
+langchain>=0.2.0
+langchain-community
+langchain-openai
+langchain-chroma
+
+# Ingestion & PDF Parsing
+pypdf
+pdfminer.six
+unstructured
+
+# Hybrid Search & Reranking
+rank_bm25
+sentence-transformers
+cohere
+
+# Evaluation
+ragas
+datasets
+
+# API & UI
+fastapi
+uvicorn
+streamlit
+pydantic
+python-dotenv
