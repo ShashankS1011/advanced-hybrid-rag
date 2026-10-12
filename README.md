@@ -1,134 +1,146 @@
 # Advanced Production Hybrid RAG Engine
 
-A high-performance, low-latency Retrieval-Augmented Generation (RAG) system engineered for complex document understanding. This system combines **Sparse Search (BM25)** and **Dense Vector Search (ChromaDB)** with **FlashRank Cross-Encoder Re-ranking** and **Groq Llama 3 Streaming Inference** to deliver highly accurate answers accompanied by precise, page-level source citations.
+This project is a retrieval-augmented generation application designed to answer questions from PDF documents using a hybrid search pipeline. It combines lexical retrieval, semantic retrieval, reranking, and large-language-model generation to provide grounded answers with page-level source references.
 
----
+The primary purpose is to enable accurate, explainable document Q&A over extended PDFs such as financial reports, contracts, policy documents, and technical documentation. The system is built for practical use in document analysis workflows where answer quality, traceability, and transparency matter.
 
-## Architecture Overview
+## What This Project Does
 
-* **PDF Document**
-* **PyMuPDF Parser** (Page-Level Metadata Tagging)
-* **BM25 Retriever** (Keyword Matching) + **Chroma Vector Database** (`all-MiniLM-L6-v2` Embeddings)
-* **Candidate Chunks (Top-K)**
-* **FlashRank Cross-Encoder** (Neural Re-ranking)
-* **High-Relevance Chunks + Prompt**
-* **Groq LLM Inference** (`llama-3.1-8b-instant`)
-* **Streamlit UI with Streaming** (Live Tokens + Page Citations + Chunk Inspector)
+The application ingests a PDF, splits it into manageable text chunks, retrieves the most relevant passages using both keyword and semantic search, reranks the best candidates, and then uses a Groq-hosted language model to answer the user question using only the retrieved context.
 
-### Core Features
+This workflow helps reduce hallucination risk by constraining generation to the actual document content. It also surfaces source page references so users can verify the answer against the underlying document.
 
-* **Hybrid Retrieval (Dense + Sparse):** Combines lexical search via BM25 and semantic vector search via ChromaDB for high recall across structured data and domain-specific vocabulary.
-* **FlashRank Cross-Encoder Re-ranking:** Re-scores and filters retrieved chunks using ultra-fast cross-encoders to eliminate noise and reduce context window overload.
-* **Page-Level Metadata & Citations:** Tracks exact page numbers throughout chunking, retrieval, and generation to provide verifiable inline source citations.
-* **Real-time Token Streaming:** Integrates Groq's low-latency API (`llama-3.1-8b-instant`) to stream responses back to the user instantly.
-* **Chunk Inspection & Transparency:** Includes a dedicated UI inspector showing raw retrieved chunks, page numbers, and FlashRank relevance scores.
+## Core Components
 
----
+- **Document ingestion:** Reads PDF files and extracts text while preserving page metadata.
+- **Chunking:** Splits documents into overlapping text blocks for targeted retrieval.
+- **Hybrid retrieval:** Uses BM25 for keyword matching and Chroma for semantic similarity search.
+- **Reranking:** Reorders retrieved chunks to prioritize the most relevant context.
+- **Generation:** Uses Groq LLM inference to produce responses grounded in the retrieved content.
+- **User experience:** Exposes the workflow through a Streamlit interface with visible citations and chunk inspection.
 
 ## Repository Structure
 
 ```text
 .
-├── data/                  # Input PDF directory (e.g., financial_report.pdf)
+├── data/                  # Input PDF directory
 ├── src/
 │   ├── __init__.py
-│   ├── config.py          # Environment/config validation
-│   ├── ingest.py          # PDF parser & text chunking
-│   ├── retriever.py       # BM25 + vector hybrid search + reranking
-│   └── pipeline.py        # End-to-end RAG orchestration & streaming
-├── app.py                 # Streamlit web application frontend
+│   ├── config.py          # Environment and runtime settings
+│   ├── ingest.py          # PDF parsing and chunking logic
+│   ├── retriever.py       # Hybrid retrieval and reranking logic
+│   └── pipeline.py        # End-to-end pipeline orchestration
+├── app.py                 # Streamlit web application
 ├── requirements.txt       # Python dependencies
 ├── .env.example           # Environment variable template
-├── tests/                 # Regression tests
+├── tests/                 # Automated tests
 ├── README.md              # Project documentation
-└── .gitignore             # Repo exclusions
+├── .github/workflows/     # CI pipeline configuration
+└── .gitignore             # Repository exclusions
 ```
 
----
+## Prerequisites
 
-## Quickstart & Installation
+- Python 3.11+
+- A Groq API key
+- Access to the required Python dependencies listed in the project requirements
 
-### Prerequisites
+## Installation
 
-* Python 3.10+
-* A Groq API key
-
-### 1. Clone the Repository
+### 1. Clone the repository
 
 ```bash
-git clone [https://github.com/your-username/advanced-hybrid-rag.git](https://github.com/your-username/advanced-hybrid-rag.git)
+git clone https://github.com/ShashankS1011/advanced-hybrid-rag.git
 cd advanced-hybrid-rag
 ```
 
-### 2. Set Up Virtual Environment
+### 2. Create a virtual environment
 
-**Linux / macOS:**
+**Linux / macOS**
+
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 ```
 
-**Windows (PowerShell):**
+**Windows (PowerShell)**
+
 ```powershell
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 ```
 
-### 3. Install Dependencies
+### 3. Install dependencies
 
 ```bash
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 4. Configure Environment Variables
+### 4. Configure environment variables
 
-Create a `.env` file in the root directory and add your Groq API key:
+Create a `.env` file in the project root with the following values:
 
 ```env
-GROQ_API_KEY=your_actual_groq_api_key_here
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL=llama-3.1-8b-instant
 ```
 
----
+Optional values can also be configured for retrieval tuning and storage:
+
+```env
+CHROMA_DB_DIR=./chroma_db
+CHROMA_COLLECTION_NAME=advanced_hybrid_rag
+EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+CHUNK_SIZE=1000
+CHUNK_OVERLAP=200
+DENSE_K=12
+SPARSE_K=12
+RERANK_TOP_N=4
+```
 
 ## Running the Application
 
-Launch the Streamlit web dashboard:
+Start the Streamlit app:
 
 ```bash
 streamlit run app.py
 ```
 
-Open your browser at `http://localhost:8501`.
+Then open the local Streamlit URL shown in the terminal, typically:
 
-## Running Tests
+```text
+http://localhost:8501
+```
+
+## How to Use It
+
+- Upload a PDF document from the sidebar.
+- Ask a question about the document in the chat input.
+- Review the generated answer and the page citations shown in the output.
+- Inspect the retrieved chunks to understand which sections influenced the final response.
+
+## Development and Validation
+
+Run the automated tests:
 
 ```bash
 python -m pytest -q
 ```
 
-### Usage Guide
+The project includes CI via GitHub Actions to validate the codebase on pushes and pull requests.
 
-1. **Upload Document:** Use the sidebar to upload any PDF (e.g., financial reports, legal contracts, research papers).
-2. **Ask Questions:** Query your document using natural language in the chat bar.
-3. **Review Citations:** Check the inline page references attached to the response.
-4. **Inspect Chunks:** Expand the **Inspect Re-ranked Search Chunks & FlashRank Scores** section to evaluate retrieved text segments and relevance scores.
+## Technology Stack
 
----
+- **Frontend:** Streamlit
+- **PDF parsing:** PyMuPDF
+- **Embeddings:** sentence-transformers
+- **Vector search:** Chroma
+- **Keyword search:** BM25
+- **Reranking:** FlashRank
+- **LLM inference:** Groq
+- **Framework:** LangChain
 
-## Tech Stack
+## Summary
 
-* **Frontend:** Streamlit
-* **Document Parsing:** PyMuPDF (`fitz`)
-* **Embeddings:** `sentence-transformers/all-MiniLM-L6-v2`
-* **Vector Store:** ChromaDB
-* **Keyword Search:** `rank_bm25`
-* **Reranker:** `FlashRank`
-* **LLM Engine:** Groq API (`llama-3.1-8b-instant`)
-* **Framework:** LangChain ecosystem
-
----
-
-## License
-
-Distributed under the MIT License. See `LICENSE` for more information.
+This project provides a practical hybrid RAG workflow for document-grounded question answering. It is designed to help users extract precise answers from large PDFs in a way that is explainable, traceable, and easy to interact with from a browser interface.
