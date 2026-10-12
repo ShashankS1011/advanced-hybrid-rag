@@ -1,10 +1,15 @@
 # Core Framework & LLM
 langchain>=0.2.0
 langchain-community
-langchain-openai
+langchain-core
 langchain-chroma
+langchain-huggingface
+langchain-groq
+langchain-classic
+langchain-text-splitters
 
 # Ingestion & PDF Parsing
+pymupdf
 pypdf
 pdfminer.six
 unstructured
@@ -12,7 +17,7 @@ unstructured
 # Hybrid Search & Reranking
 rank_bm25
 sentence-transformers
-cohere
+flashrank
 
 # Evaluation
 ragas
@@ -24,3 +29,6 @@ uvicorn
 streamlit
 pydantic
 python-dotenv
+
+# Testing
+pytest

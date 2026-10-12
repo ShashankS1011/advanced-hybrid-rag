@@ -1,59 +1,107 @@
-import os
-from typing import List
+import logging
+import re
+from pathlib import Path
+from typing import Any, List, Sequence
+
+from langchain_chroma import Chroma
+from langchain_classic.retrievers import ContextualCompressionRetriever, EnsembleRetriever
 from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_chroma import Chroma
-from langchain_community.retrievers import BM25Retriever
-from langchain_classic.retrievers import EnsembleRetriever
-from langchain_community.document_compressors.flashrank_rerank import FlashrankRerank
-from langchain_classic.retrievers import ContextualCompressionRetriever
+from rank_bm25 import BM25Okapi
+
 from src.config import settings
 
+logger = logging.getLogger(__name__)
+
+
+class BM25RetrieverAdapter:
+    """A lightweight BM25 retriever that avoids deprecated community wrappers."""
+
+    def __init__(self, documents: Sequence[Document], k: int):
+        self.documents = list(documents)
+        self.k = max(1, int(k))
+        tokenized_docs = [self._tokenize(doc.page_content) for doc in self.documents]
+        self.bm25 = BM25Okapi(tokenized_docs)
+
+    @staticmethod
+    def _tokenize(text: str) -> List[str]:
+        return re.findall(r"\w+", (text or "").lower())
+
+    def invoke(self, query: str) -> List[Document]:
+        if not query or not str(query).strip():
+            return []
+
+        tokenized_query = self._tokenize(query)
+        if not tokenized_query:
+            return []
+
+        scores = self.bm25.get_scores(tokenized_query)
+        ranked_indexes = sorted(range(len(self.documents)), key=lambda idx: scores[idx], reverse=True)[: self.k]
+        return [self.documents[idx] for idx in ranked_indexes]
+
+    def get_relevant_documents(self, query: str) -> List[Document]:
+        return self.invoke(query)
+
+
 class HybridRetrieverBuilder:
-    """Builds a Hybrid Retriever enhanced with FlashRank Cross-Encoder Reranking."""
+    """Builds a hybrid retriever with FlashRank reranking and a safe fallback path."""
+
+    _embeddings_cache: HuggingFaceEmbeddings | None = None
 
     def __init__(self, documents: List[Document]):
+        if not documents:
+            raise ValueError("At least one document is required to build the retriever.")
         self.documents = documents
-        
-        self.embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2",
-            model_kwargs={"device": "cpu"},
-            encode_kwargs={"normalize_embeddings": True, "batch_size": 32}
-        )
+        self.embeddings = self._get_or_create_embeddings()
+
+    @classmethod
+    def _get_or_create_embeddings(cls) -> HuggingFaceEmbeddings:
+        if cls._embeddings_cache is None:
+            cls._embeddings_cache = HuggingFaceEmbeddings(
+                model_name=settings.EMBEDDING_MODEL,
+                model_kwargs={"device": "cpu"},
+                encode_kwargs={"normalize_embeddings": True, "batch_size": 32},
+            )
+        return cls._embeddings_cache
 
     def _build_dense_retriever(self):
         """Initializes Chroma Vector Store for semantic search."""
         vectorstore = Chroma.from_documents(
             documents=self.documents,
             embedding=self.embeddings,
+            persist_directory=str(Path(settings.CHROMA_DB_DIR)),
+            collection_name=settings.CHROMA_COLLECTION_NAME,
         )
-        # Fetch 12 candidates initially for reranking
-        return vectorstore.as_retriever(search_kwargs={"k": 12})
+        return vectorstore.as_retriever(search_kwargs={"k": settings.DENSE_K})
 
     def _build_sparse_retriever(self):
-        """Initializes BM25 Keyword Retriever."""
-        bm25_retriever = BM25Retriever.from_documents(self.documents)
-        bm25_retriever.k = 12
-        return bm25_retriever
+        """Initializes a BM25 keyword retriever without deprecated wrappers."""
+        return BM25RetrieverAdapter(self.documents, settings.SPARSE_K)
 
-    def get_hybrid_reranked_retriever(self) -> ContextualCompressionRetriever:
-        """Combines Dense + Sparse retrievers and reranks top candidates with FlashRank."""
+    def _build_fallback_retriever(self):
+        """Builds an uncompressed hybrid retriever when reranking is unavailable."""
         dense = self._build_dense_retriever()
         sparse = self._build_sparse_retriever()
+        return EnsembleRetriever(retrievers=[dense, sparse], weights=[0.5, 0.5])
 
-        # Step 1: Broad Hybrid Retrieval (Fetch top 12 from each)
-        ensemble = EnsembleRetriever(
-            retrievers=[dense, sparse],
-            weights=[0.5, 0.5]
-        )
+    def get_hybrid_reranked_retriever(self) -> Any:
+        """Combines dense + sparse retrievers and reranks top candidates with FlashRank."""
+        ensemble = self._build_fallback_retriever()
 
-        # Step 2: Cross-Encoder Reranker (Narrows down to top 4 highest relevance chunks)
-        compressor = FlashrankRerank(top_n=settings.TOP_K_RETRIEVAL)
-        
-        compression_retriever = ContextualCompressionRetriever(
-            base_compressor=compressor,
-            base_retriever=ensemble
-        )
+        try:
+            from langchain_community.document_compressors.flashrank_rerank import FlashrankRerank
+        except ImportError:
+            logger.warning("FlashRank reranker is unavailable; using hybrid fallback retriever.")
+            return ensemble
 
-        print("Hybrid + FlashRank Reranked Retriever initialized successfully.")
-        return compression_retriever
+        try:
+            compressor = FlashrankRerank(top_n=min(settings.RERANK_TOP_N, len(self.documents)))
+            compression_retriever = ContextualCompressionRetriever(
+                base_compressor=compressor,
+                base_retriever=ensemble,
+            )
+            logger.info("Hybrid + FlashRank retriever initialized successfully.")
+            return compression_retriever
+        except Exception as exc:  # pragma: no cover - exercised in runtime integration
+            logger.warning("FlashRank reranking failed, using hybrid fallback retriever. Error: %s", exc)
+            return ensemble

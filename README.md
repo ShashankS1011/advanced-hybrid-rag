@@ -32,13 +32,16 @@ A high-performance, low-latency Retrieval-Augmented Generation (RAG) system engi
 ├── data/                  # Input PDF directory (e.g., financial_report.pdf)
 ├── src/
 │   ├── __init__.py
-│   ├── ingester.py        # PyMuPDF parser & text chunker
-│   ├── retriever.py       # BM25 + Vector Hybrid search & FlashRank setup
-│   └── pipeline.py        # End-to-end RAG orchestrator & Groq streaming
+│   ├── config.py          # Environment/config validation
+│   ├── ingest.py          # PDF parser & text chunking
+│   ├── retriever.py       # BM25 + vector hybrid search + reranking
+│   └── pipeline.py        # End-to-end RAG orchestration & streaming
 ├── app.py                 # Streamlit web application frontend
 ├── requirements.txt       # Python dependencies
 ├── .env.example           # Environment variable template
-└── README.md              # Project documentation
+├── tests/                 # Regression tests
+├── README.md              # Project documentation
+└── .gitignore             # Repo exclusions
 ```
 
 ---
@@ -97,6 +100,12 @@ streamlit run app.py
 ```
 
 Open your browser at `http://localhost:8501`.
+
+## Running Tests
+
+```bash
+python -m pytest -q
+```
 
 ### Usage Guide
 
