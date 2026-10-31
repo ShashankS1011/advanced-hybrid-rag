@@ -50,7 +50,7 @@ class RAGPipeline:
 
     def __init__(self, document_path: str):
         settings.validate_runtime_configuration()
-        safe_path = os.path.realpath(str(document_path))
+        safe_path = os.path.normpath(str(document_path))
         if not os.path.isfile(safe_path):
             raise FileNotFoundError(f"File not found: {safe_path}")
 

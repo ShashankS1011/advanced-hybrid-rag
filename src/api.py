@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 from typing import Optional
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
@@ -29,13 +30,13 @@ app.add_middleware(
 
 # In-memory pipeline registry: doc_id -> RAGPipeline
 _PIPELINE_REGISTRY: dict[str, RAGPipeline] = {}
-DATA_DIR = os.path.realpath("data")
+DATA_DIR = os.path.normpath(os.path.abspath("data"))
 
 
 def get_safe_data_path(user_input_path: str) -> str:
     """
-    Sanitizes user-provided document paths to prevent path traversal (CWE-22 / CWE-73).
-    Extracts the file basename and ensures the resolved path is contained within DATA_DIR.
+    Validates user-provided document paths to eliminate path traversal vulnerabilities (CWE-22 / CWE-73).
+    Extracts the basename and matches it strictly against verified files present in DATA_DIR.
     """
     clean_name = os.path.basename(user_input_path.strip())
     if not clean_name or not clean_name.lower().endswith(".pdf"):
@@ -43,13 +44,18 @@ def get_safe_data_path(user_input_path: str) -> str:
             status_code=400,
             detail="Invalid document path. Only PDF files located in data/ are accessible.",
         )
-    safe_path = os.path.realpath(os.path.join(DATA_DIR, clean_name))
-    if not safe_path.startswith(DATA_DIR + os.sep) and safe_path != DATA_DIR:
-        raise HTTPException(
-            status_code=400,
-            detail="Security error: Path traversal attempt detected.",
-        )
-    return safe_path
+
+    if os.path.isdir(DATA_DIR):
+        for existing_file in os.listdir(DATA_DIR):
+            if existing_file == clean_name:
+                verified_path = os.path.normpath(os.path.join(DATA_DIR, existing_file))
+                if verified_path.startswith(DATA_DIR):
+                    return verified_path
+
+    raise HTTPException(
+        status_code=404,
+        detail=f"Document '{clean_name}' not found in data directory.",
+    )
 
 
 class Message(BaseModel):
@@ -91,7 +97,6 @@ def _get_or_create_pipeline(doc_id: str | None, doc_path: str | None) -> RAGPipe
         return _PIPELINE_REGISTRY[doc_id]
 
     if not doc_path and doc_id:
-        # Search registry for matching doc_id
         for d_id, pipe in _PIPELINE_REGISTRY.items():
             if d_id == doc_id:
                 return pipe
@@ -103,12 +108,6 @@ def _get_or_create_pipeline(doc_id: str | None, doc_path: str | None) -> RAGPipe
         )
 
     safe_target_path = get_safe_data_path(doc_path)
-    if not os.path.isfile(safe_target_path):
-        raise HTTPException(
-            status_code=404,
-            detail=f"Document file not found: {os.path.basename(safe_target_path)}",
-        )
-
     pipeline = RAGPipeline(safe_target_path)
     _PIPELINE_REGISTRY[pipeline.doc_id] = pipeline
     return pipeline
@@ -144,20 +143,26 @@ def list_documents():
 @app.post("/upload", response_model=DocumentInfo)
 async def upload_document(file: UploadFile = File(...)):
     raw_filename = file.filename or "upload.pdf"
-    safe_destination = get_safe_data_path(raw_filename)
+    clean_name = re.sub(r"[^a-zA-Z0-9_\-\. ]", "_", os.path.basename(raw_filename))
+    if not clean_name.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
 
     os.makedirs(DATA_DIR, exist_ok=True)
+    destination_path = os.path.normpath(os.path.join(DATA_DIR, clean_name))
+    if not destination_path.startswith(DATA_DIR):
+        raise HTTPException(status_code=400, detail="Security error: Invalid target destination.")
+
     contents = await file.read()
-    with open(safe_destination, "wb") as f:
+    with open(destination_path, "wb") as f:
         f.write(contents)
 
     try:
-        pipeline = RAGPipeline(safe_destination)
+        pipeline = RAGPipeline(destination_path)
         _PIPELINE_REGISTRY[pipeline.doc_id] = pipeline
         return DocumentInfo(
             doc_id=pipeline.doc_id,
-            filename=os.path.basename(safe_destination),
-            path=safe_destination,
+            filename=clean_name,
+            path=destination_path,
             pages=pipeline.metrics.get("document_pages", 0),
             chunks=pipeline.metrics.get("chunks_created", 0),
         )

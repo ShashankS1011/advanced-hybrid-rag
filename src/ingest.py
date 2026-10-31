@@ -42,7 +42,7 @@ def _format_table_as_markdown(table_data: list[list[str | None]]) -> str:
 
 def compute_file_hash(file_path: str | os.PathLike[str]) -> str:
     """Computes a quick SHA-256 hash of a file for identification and caching."""
-    resolved_path = os.path.realpath(str(file_path))
+    resolved_path = os.path.normpath(str(file_path))
     if not os.path.isfile(resolved_path):
         raise FileNotFoundError(f"File not found: {resolved_path}")
     hasher = hashlib.sha256()
@@ -78,15 +78,15 @@ class DocumentIngestor:
 
     def load_pdf(self, file_path: str | os.PathLike[str]) -> list[Document]:
         """Loads a PDF and returns page-level documents with table extraction and metadata."""
-        resolved_path = os.path.realpath(str(file_path))
+        resolved_path = os.path.normpath(str(file_path))
         path = Path(resolved_path)
         if not path.is_file():
             raise FileNotFoundError(f"File not found: {path}")
         if path.suffix.lower() != ".pdf":
             raise ValueError(f"Only PDF files are supported: {path}")
 
-        doc_hash = compute_file_hash(path)
-        pdf = fitz.open(str(path))
+        doc_hash = compute_file_hash(resolved_path)
+        pdf = fitz.open(resolved_path)
         documents: list[Document] = []
         try:
             page_count = pdf.page_count
