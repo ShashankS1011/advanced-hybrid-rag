@@ -1,6 +1,10 @@
 # Advanced Production Hybrid RAG Engine
 
 [![CI](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/ci.yml)
+[![CodeQL Analysis](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/codeql.yml/badge.svg)](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/codeql.yml)
+[![Lint & Quality](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/lint.yml/badge.svg)](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/lint.yml)
+[![Docker Build](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/docker.yml/badge.svg)](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/docker.yml)
+[![Security Audit](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/security-audit.yml/badge.svg)](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/security-audit.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Security Policy](https://img.shields.io/badge/Security-Policy-brightgreen.svg)](SECURITY.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)

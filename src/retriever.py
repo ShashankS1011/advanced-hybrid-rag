@@ -1,13 +1,18 @@
 import logging
 import re
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, List, Sequence
+from typing import Any
 
 from langchain_chroma import Chroma
+
 try:
     from langchain.retrievers import ContextualCompressionRetriever, EnsembleRetriever
 except ImportError:
-    from langchain_classic.retrievers import ContextualCompressionRetriever, EnsembleRetriever
+    from langchain_classic.retrievers import (
+        ContextualCompressionRetriever,
+        EnsembleRetriever,
+    )
 
 from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -28,10 +33,10 @@ class BM25RetrieverAdapter:
         self.bm25 = BM25Okapi(tokenized_docs)
 
     @staticmethod
-    def _tokenize(text: str) -> List[str]:
+    def _tokenize(text: str) -> list[str]:
         return re.findall(r"\w+", (text or "").lower())
 
-    def invoke(self, query: str) -> List[Document]:
+    def invoke(self, query: str) -> list[Document]:
         if not query or not str(query).strip():
             return []
 
@@ -49,10 +54,10 @@ class BM25RetrieverAdapter:
         ranked_pairs = sorted(scored_pairs, key=lambda pair: pair[1], reverse=True)[: self.k]
         return [self.documents[idx] for idx, _ in ranked_pairs]
 
-    def get_relevant_documents(self, query: str) -> List[Document]:
+    def get_relevant_documents(self, query: str) -> list[Document]:
         return self.invoke(query)
 
-    async def ainvoke(self, query: str) -> List[Document]:
+    async def ainvoke(self, query: str) -> list[Document]:
         return self.invoke(query)
 
 
@@ -61,7 +66,7 @@ class HybridRetrieverBuilder:
 
     _embeddings_cache: HuggingFaceEmbeddings | None = None
 
-    def __init__(self, documents: List[Document], collection_name: str | None = None):
+    def __init__(self, documents: list[Document], collection_name: str | None = None):
         if not documents:
             raise ValueError("At least one document is required to build the retriever.")
         self.documents = documents
@@ -113,7 +118,9 @@ class HybridRetrieverBuilder:
         ensemble = self._build_fallback_retriever()
 
         try:
-            from langchain_community.document_compressors.flashrank_rerank import FlashrankRerank
+            from langchain_community.document_compressors.flashrank_rerank import (
+                FlashrankRerank,
+            )
         except ImportError:
             logger.warning("FlashRank reranker is unavailable; using hybrid fallback retriever.")
             return ensemble

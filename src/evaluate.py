@@ -3,7 +3,7 @@ import json
 import logging
 import re
 from dataclasses import asdict, dataclass
-from typing import Any, Dict, List
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -13,8 +13,8 @@ class EvaluationSample:
     question: str
     ground_truth: str
     predicted_answer: str = ""
-    contexts: List[str] = None
-    citations: List[int] = None
+    contexts: list[str] = None
+    citations: list[int] = None
 
     def __post_init__(self):
         if self.contexts is None:
@@ -29,11 +29,11 @@ class EvaluationReport:
     citation_accuracy: float
     context_coverage: float
     lexical_similarity: float
-    metrics: Dict[str, float]
-    details: List[Dict[str, Any]]
+    metrics: dict[str, float]
+    details: list[dict[str, Any]]
 
 
-def compute_citation_score(predicted_answer: str, retrieved_contexts: List[str]) -> float:
+def compute_citation_score(predicted_answer: str, retrieved_contexts: list[str]) -> float:
     """Verifies that [Page X] citations in the answer correspond to extracted context pages."""
     cited_pages = [int(p) for p in re.findall(r"\[Page\s+(\d+)\]", predicted_answer, re.IGNORECASE)]
     if not cited_pages:
@@ -64,11 +64,11 @@ def compute_token_overlap(reference: str, hypothesis: str) -> float:
 
 def evaluate_rag_pipeline(
     pipeline: Any,
-    test_cases: List[Dict[str, str]],
+    test_cases: list[dict[str, str]],
     use_ragas: bool = False,
 ) -> EvaluationReport:
     """Evaluates the RAG pipeline using ground-truth test cases."""
-    samples: List[EvaluationSample] = []
+    samples: list[EvaluationSample] = []
     citation_scores = []
     overlap_scores = []
 

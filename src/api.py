@@ -2,7 +2,6 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,7 +28,7 @@ app.add_middleware(
 )
 
 # In-memory pipeline registry: doc_id -> RAGPipeline
-_PIPELINE_REGISTRY: Dict[str, RAGPipeline] = {}
+_PIPELINE_REGISTRY: dict[str, RAGPipeline] = {}
 
 
 class Message(BaseModel):
@@ -39,22 +38,22 @@ class Message(BaseModel):
 
 class QueryRequest(BaseModel):
     question: str = Field(..., description="User query about the document")
-    doc_id: Optional[str] = Field(None, description="Document ID returned during upload")
-    document_path: Optional[str] = Field(None, description="Path to PDF if doc_id not provided")
-    chat_history: List[Message] = Field(default_factory=list, description="Prior conversation turns")
+    doc_id: str | None = Field(None, description="Document ID returned during upload")
+    document_path: str | None = Field(None, description="Path to PDF if doc_id not provided")
+    chat_history: list[Message] = Field(default_factory=list, description="Prior conversation turns")
 
 
 class SourceItem(BaseModel):
     file: str
     page: int
-    score: Optional[float] = None
+    score: float | None = None
     text: str
 
 
 class QueryResponse(BaseModel):
     question: str
     answer: str
-    sources: List[SourceItem]
+    sources: list[SourceItem]
     doc_id: str
 
 
@@ -66,7 +65,7 @@ class DocumentInfo(BaseModel):
     chunks: int
 
 
-def _get_or_create_pipeline(doc_id: Optional[str], doc_path: Optional[str]) -> RAGPipeline:
+def _get_or_create_pipeline(doc_id: str | None, doc_path: str | None) -> RAGPipeline:
     if doc_id and doc_id in _PIPELINE_REGISTRY:
         return _PIPELINE_REGISTRY[doc_id]
 
@@ -80,7 +79,7 @@ def _get_or_create_pipeline(doc_id: Optional[str], doc_path: Optional[str]) -> R
     if not target_path or not os.path.exists(target_path):
         raise HTTPException(
             status_code=404,
-            detail=f"Document not found or not indexed. Please upload document first.",
+            detail="Document not found or not indexed. Please upload document first.",
         )
 
     pipeline = RAGPipeline(target_path)
@@ -99,7 +98,7 @@ def healthcheck():
     }
 
 
-@app.get("/documents", response_model=List[DocumentInfo])
+@app.get("/documents", response_model=list[DocumentInfo])
 def list_documents():
     docs = []
     for doc_id, pipe in _PIPELINE_REGISTRY.items():

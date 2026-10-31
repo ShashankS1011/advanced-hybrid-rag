@@ -1,0 +1,31 @@
+name: Dependency Security Audit
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "requirements.txt"
+  pull_request:
+    paths:
+      - "requirements.txt"
+  schedule:
+    - cron: "0 8 * * 1"
+
+jobs:
+  audit:
+    name: Pip-Audit Dependency Scanner
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run pip-audit
+        uses: pypa/gh-action-pip-audit@v1.1.0
+        with:
+          inputs: requirements.txt

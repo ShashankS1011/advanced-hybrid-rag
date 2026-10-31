@@ -150,9 +150,9 @@ if pdf_path and os.path.exists(pdf_path):
                     )
                     full_answer = st.write_stream(response_generator)
 
-                    pages = sorted(list({s["page"] for s in sources_info if s["page"] != "N/A"}))
+                    pages = sorted({s["page"] for s in sources_info if s["page"] != "N/A"})
                     pages_str = ", ".join([f"Page {p}" for p in pages])
-                    source_files = sorted(list({s["file"] for s in sources_info}))
+                    source_files = sorted({s["file"] for s in sources_info})
                     files_str = ", ".join([f"`{f}`" for f in source_files])
                     citation_footer = f"\n\n**Sources:** {files_str} ({pages_str})" if sources_info else "\n\n**Sources:** `Document` (N/A)"
                     st.markdown(citation_footer)

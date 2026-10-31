@@ -73,3 +73,4 @@ We consider security research conducted under this policy to be authorized. We w
 - Make a good-faith effort to avoid privacy violations, data destruction, and service interruption.
 - Report vulnerabilities to us promptly without public disclosure until a patch is released.
 - Act in accordance with applicable laws and ethical disclosure guidelines.
+

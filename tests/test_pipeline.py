@@ -3,7 +3,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 from langchain_core.documents import Document
 
-from src.config import settings
 from src.evaluate import (
     compute_citation_score,
     compute_token_overlap,

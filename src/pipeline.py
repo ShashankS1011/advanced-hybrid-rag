@@ -2,7 +2,7 @@ import logging
 import os
 from collections.abc import Generator
 from time import perf_counter
-from typing import Any, List
+from typing import Any
 
 os.environ["OMP_NUM_THREADS"] = "2"
 os.environ["MKL_NUM_THREADS"] = "2"
@@ -81,7 +81,7 @@ class RAGPipeline:
             streaming=True,
         )
 
-    def _format_docs(self, docs: List[Any]) -> str:
+    def _format_docs(self, docs: list[Any]) -> str:
         formatted = []
         for document in docs:
             page = document.metadata.get("page_number", "Unknown")
@@ -116,7 +116,7 @@ class RAGPipeline:
             logger.warning("Query condensation failed, using raw query: %s", exc)
             return user_query.strip()
 
-    def retrieve_chunks(self, query: str, chat_history: list[dict] | None = None) -> List[Any]:
+    def retrieve_chunks(self, query: str, chat_history: list[dict] | None = None) -> list[Any]:
         """Retrieve and rerank top matching chunks with metadata."""
         if not query or not str(query).strip():
             return []

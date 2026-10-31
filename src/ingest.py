@@ -3,7 +3,6 @@ import logging
 import os
 import re
 from pathlib import Path
-from typing import List
 
 import fitz
 from langchain_core.documents import Document
@@ -74,7 +73,7 @@ class DocumentIngestor:
             separators=["\n\n", "\n", " ", ""],
         )
 
-    def load_pdf(self, file_path: str | os.PathLike[str]) -> List[Document]:
+    def load_pdf(self, file_path: str | os.PathLike[str]) -> list[Document]:
         """Loads a PDF and returns page-level documents with table extraction and metadata."""
         path = Path(file_path)
         if not path.exists():
@@ -84,7 +83,7 @@ class DocumentIngestor:
 
         doc_hash = compute_file_hash(path)
         pdf = fitz.open(str(path))
-        documents: List[Document] = []
+        documents: list[Document] = []
         try:
             page_count = pdf.page_count
             for page_index in range(page_count):
@@ -132,7 +131,7 @@ class DocumentIngestor:
         logger.info("Loaded %s pages from %s (hash: %s)", len(documents), path.name, doc_hash)
         return documents
 
-    def chunk_documents(self, documents: List[Document]) -> List[Document]:
+    def chunk_documents(self, documents: list[Document]) -> list[Document]:
         """Splits documents into smaller chunks and preserves page/source metadata."""
         if not documents:
             return []

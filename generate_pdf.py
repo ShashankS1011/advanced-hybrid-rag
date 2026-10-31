@@ -1,17 +1,19 @@
 import os
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+
 from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
 
 def generate_sample_financial_report():
     os.makedirs("data", exist_ok=True)
     pdf_path = "data/financial_report.pdf"
-    
+
     doc = SimpleDocTemplate(pdf_path, pagesize=letter)
     styles = getSampleStyleSheet()
     story = []
-    
+
     title_style = ParagraphStyle(
         'DocTitle',
         parent=styles['Heading1'],
@@ -31,12 +33,12 @@ def generate_sample_financial_report():
     )
     body_style = styles['Normal']
     body_style.spaceAfter = 8
-    
+
     # Title
     story.append(Paragraph("Acme Corporation - Quarterly Financial Report (Q4 2025)", title_style))
     story.append(Paragraph("<b>Author:</b> Financial Intelligence Unit | <b>Date:</b> January 2026", body_style))
     story.append(Spacer(1, 12))
-    
+
     # Executive Summary
     story.append(Paragraph("1. Executive Summary", heading_style))
     story.append(Paragraph(
@@ -45,7 +47,7 @@ def generate_sample_financial_report():
         "stayed controlled at $7.2 Million, yielding an EBITDA margin of 28.5%.",
         body_style
     ))
-    
+
     # Financial Highlights Table
     story.append(Paragraph("2. Financial Metrics Summary", heading_style))
     data = [
@@ -67,7 +69,7 @@ def generate_sample_financial_report():
     ]))
     story.append(t)
     story.append(Spacer(1, 12))
-    
+
     # Risk Assessment
     story.append(Paragraph("3. Operational Risks & Future Outlook", heading_style))
     story.append(Paragraph(
@@ -75,7 +77,7 @@ def generate_sample_financial_report():
         "Management plans to hedge electricity costs and diversify server hardware deployment across multiple regional cloud providers.",
         body_style
     ))
-    
+
     doc.build(story)
     print(f"Sample PDF successfully created at: {pdf_path}")
 
