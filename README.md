@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Security Policy](https://img.shields.io/badge/Security-Policy-brightgreen.svg)](SECURITY.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 An enterprise-grade, retrieval-augmented generation (RAG) system engineered for high-precision, explainable document question answering over complex PDFs (financial reports, legal filings, technical whitepapers, contracts).
@@ -252,6 +253,12 @@ python -m pytest
 ```
 
 Configuration and test path exclusions are managed via [`pyproject.toml`](file:///d:/Documents/advanced-hybrid-rag/pyproject.toml).
+
+---
+
+## Security
+
+Please report vulnerabilities responsibly. See [`SECURITY.md`](SECURITY.md) for vulnerability disclosure procedures, supported versions, and response timelines.
 
 ---
 
