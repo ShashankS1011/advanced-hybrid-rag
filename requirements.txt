@@ -1,5 +1,5 @@
 # Core Framework & LLM
-langchain>=0.2.0
+langchain>=1.4.7
 langchain-community>=0.2.0
 langchain-core>=0.2.0
 langchain-chroma>=0.1.0
