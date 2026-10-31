@@ -19,6 +19,12 @@ class Settings:
     DENSE_K: int = 12
     SPARSE_K: int = 12
     RERANK_TOP_N: int = 4
+    DENSE_WEIGHT: float = 0.5
+    SPARSE_WEIGHT: float = 0.5
+    TEMPERATURE: float = 0.1
+    RERANK_MODEL: str = "ms-marco-TinyBERT-L-2-v2"
+    DEVICE: str = "cpu"
+    SCORE_THRESHOLD: float = 0.0
 
     def __post_init__(self) -> None:
         self.GROQ_API_KEY = os.getenv("GROQ_API_KEY", self.GROQ_API_KEY).strip()
@@ -37,6 +43,13 @@ class Settings:
         self.SPARSE_K = int(os.getenv("SPARSE_K", self.SPARSE_K))
         self.RERANK_TOP_N = int(os.getenv("RERANK_TOP_N", self.RERANK_TOP_N))
 
+        self.DENSE_WEIGHT = float(os.getenv("DENSE_WEIGHT", self.DENSE_WEIGHT))
+        self.SPARSE_WEIGHT = float(os.getenv("SPARSE_WEIGHT", self.SPARSE_WEIGHT))
+        self.TEMPERATURE = float(os.getenv("TEMPERATURE", self.TEMPERATURE))
+        self.RERANK_MODEL = os.getenv("RERANK_MODEL", self.RERANK_MODEL).strip()
+        self.DEVICE = os.getenv("DEVICE", self.DEVICE).strip()
+        self.SCORE_THRESHOLD = float(os.getenv("SCORE_THRESHOLD", self.SCORE_THRESHOLD))
+
         self._validate()
 
     def _validate(self) -> None:
@@ -54,6 +67,12 @@ class Settings:
             raise ValueError("SPARSE_K must be greater than zero.")
         if self.RERANK_TOP_N <= 0:
             raise ValueError("RERANK_TOP_N must be greater than zero.")
+        if not (0.0 <= self.DENSE_WEIGHT <= 1.0):
+            raise ValueError("DENSE_WEIGHT must be between 0.0 and 1.0.")
+        if not (0.0 <= self.SPARSE_WEIGHT <= 1.0):
+            raise ValueError("SPARSE_WEIGHT must be between 0.0 and 1.0.")
+        if not (0.0 <= self.TEMPERATURE <= 2.0):
+            raise ValueError("TEMPERATURE must be between 0.0 and 2.0.")
 
     def validate_runtime_configuration(self) -> None:
         if not self.GROQ_API_KEY:

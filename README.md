@@ -1,146 +1,260 @@
 # Advanced Production Hybrid RAG Engine
 
-This project is a retrieval-augmented generation application designed to answer questions from PDF documents using a hybrid search pipeline. It combines lexical retrieval, semantic retrieval, reranking, and large-language-model generation to provide grounded answers with page-level source references.
+[![CI](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/ci.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-The primary purpose is to enable accurate, explainable document Q&A over extended PDFs such as financial reports, contracts, policy documents, and technical documentation. The system is built for practical use in document analysis workflows where answer quality, traceability, and transparency matter.
+An enterprise-grade, retrieval-augmented generation (RAG) system engineered for high-precision, explainable document question answering over complex PDFs (financial reports, legal filings, technical whitepapers, contracts).
 
-## What This Project Does
+The engine integrates **table-aware document ingestion**, **isolated hybrid retrieval (BM25 + Chroma Vector Search)**, **FlashRank cross-encoder reranking**, **conversational query condensation**, and **in-text citation grounding** powered by **Groq Llama 3**. It offers both an interactive **Streamlit UI** and a production-ready **FastAPI REST & Server-Sent Events (SSE) streaming API**.
 
-The application ingests a PDF, splits it into manageable text chunks, retrieves the most relevant passages using both keyword and semantic search, reranks the best candidates, and then uses a Groq-hosted language model to answer the user question using only the retrieved context.
+---
 
-This workflow helps reduce hallucination risk by constraining generation to the actual document content. It also surfaces source page references so users can verify the answer against the underlying document.
+## Architecture Overview
 
-## Core Components
+```mermaid
+flowchart TD
+    User([User Question + History]) --> Condenser[Conversational Query Condenser]
+    Condenser --> |Standalone Query| Retrieval[Hybrid Retrieval Engine]
+    
+    subgraph Ingestion [Ingestion & Indexing]
+        PDF[PDF Document] --> Parser[PyMuPDF Parser + Table Detection]
+        Parser --> Tables[Markdown Table Formatter]
+        Parser --> Splitter[Recursive Token-Aware Splitter]
+        Splitter --> Chunks[Document Chunks with Metadata]
+        Chunks --> BM25Index[In-Memory BM25 Index]
+        Chunks --> ChromaDB[Isolated ChromaDB Collection]
+    end
 
-- **Document ingestion:** Reads PDF files and extracts text while preserving page metadata.
-- **Chunking:** Splits documents into overlapping text blocks for targeted retrieval.
-- **Hybrid retrieval:** Uses BM25 for keyword matching and Chroma for semantic similarity search.
-- **Reranking:** Reorders retrieved chunks to prioritize the most relevant context.
-- **Generation:** Uses Groq LLM inference to produce responses grounded in the retrieved content.
-- **User experience:** Exposes the workflow through a Streamlit interface with visible citations and chunk inspection.
+    Retrieval --> |Keyword Search| BM25Index
+    Retrieval --> |Semantic Similarity| ChromaDB
+    BM25Index --> |Sparse Hits| Ensemble[Ensemble Retriever]
+    ChromaDB --> |Dense Hits| Ensemble
+    
+    Ensemble --> |Top Candidates| Reranker[FlashRank Cross-Encoder]
+    Reranker --> |Reranked Top-N Chunks| Prompt[Strict Grounding Prompt]
+    
+    Prompt --> LLM[Groq Llama 3 Streaming LLM]
+    LLM --> StreamlitUI[Streamlit Web UI]
+    LLM --> FastAPIServer[FastAPI REST / SSE Stream]
+```
+
+---
+
+## Key Features
+
+- **Table & Layout-Aware Ingestion:** Automatically detects tabular data in PDFs using PyMuPDF (`find_tables()`) and transforms rows into structured Markdown tables to preserve numeric integrity.
+- **Collection Isolation:** Dynamically namespaces vector database collections using document content hashes (`SHA-256`), eliminating cross-document contamination during hybrid search.
+- **Score-Filtered BM25:** Filters zero-score keyword matches to prevent non-matching documents from degrading hybrid search precision.
+- **Cross-Encoder Reranking:** Reorders retrieved candidate chunks using `FlashRank` (`ms-marco-TinyBERT-L-2-v2`) for superior semantic relevance before LLM context injection.
+- **Conversational Memory:** Uses chat history to reformulate ambiguous follow-up questions into self-contained search queries before retrieval.
+- **Strict In-Text Citations:** Enforces bracketed source references (e.g. `[Page 2]`) directly after every factual statement in the generated answer.
+- **Dual Interfaces:**
+  - **Streamlit Web UI:** Chat interface with dynamic parameter sliders, chunk inspection, and history management.
+  - **FastAPI REST & Streaming Service:** Fully decoupled backend providing `/upload`, `/query`, and `/stream` (SSE) endpoints.
+- **Automated RAG Evaluation:** Built-in benchmarking suite (`src/evaluate.py`) for citation accuracy, lexical overlap, and Ragas metrics.
+- **Dockerized Deployment:** Ready-to-deploy multi-stage `Dockerfile` and `docker-compose.yml`.
+
+---
 
 ## Repository Structure
 
 ```text
 .
-├── data/                  # Input PDF directory
 ├── src/
 │   ├── __init__.py
-│   ├── config.py          # Environment and runtime settings
-│   ├── ingest.py          # PDF parsing and chunking logic
-│   ├── retriever.py       # Hybrid retrieval and reranking logic
-│   └── pipeline.py        # End-to-end pipeline orchestration
-├── app.py                 # Streamlit web application
-├── requirements.txt       # Python dependencies
-├── .env.example           # Environment variable template
-├── tests/                 # Automated tests
-├── README.md              # Project documentation
-├── .github/workflows/     # CI pipeline configuration
-└── .gitignore             # Repository exclusions
+│   ├── config.py          # Pydantic/dataclass runtime configuration & validation
+│   ├── ingest.py          # Table-aware PDF parsing & chunking
+│   ├── retriever.py       # Hybrid BM25 + Chroma retriever with FlashRank
+│   ├── pipeline.py        # Conversational RAG pipeline orchestration & streaming
+│   ├── evaluate.py        # Automated RAG evaluation & benchmarking suite
+│   └── api.py             # FastAPI REST & SSE streaming server
+├── tests/
+│   ├── test_core.py       # Unit tests for settings, ingestion, and retrievers
+│   ├── test_pipeline.py   # Tests for pipeline orchestration, memory, and evaluation
+│   └── test_api.py        # Integration tests for FastAPI endpoints
+├── data/                  # PDF storage directory
+├── app.py                 # Interactive Streamlit web application
+├── Dockerfile             # Multi-stage production container build
+├── docker-compose.yml     # Multi-container orchestration (UI + API)
+├── pyproject.toml         # Pytest & package build configuration
+├── requirements.txt       # Production dependencies
+├── .env.example           # Environment configuration template
+└── README.md              # Project documentation
 ```
 
-## Prerequisites
+---
+
+## Getting Started
+
+### Prerequisites
 
 - Python 3.11+
-- A Groq API key
-- Access to the required Python dependencies listed in the project requirements
+- A [Groq API Key](https://console.groq.com)
+- Git & Docker (optional)
 
-## Installation
-
-### 1. Clone the repository
+### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/ShashankS1011/advanced-hybrid-rag.git
 cd advanced-hybrid-rag
 ```
 
-### 2. Create a virtual environment
+### 2. Set Up Virtual Environment
 
-**Linux / macOS**
-
+**Linux / macOS:**
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 ```
 
-**Windows (PowerShell)**
-
+**Windows (PowerShell):**
 ```powershell
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 ```
 
-### 3. Install dependencies
+### 3. Install Dependencies
 
 ```bash
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### 4. Configure environment variables
+### 4. Configure Environment Variables
 
-Create a `.env` file in the project root with the following values:
+Copy the `.env.example` file to `.env`:
 
-```env
-GROQ_API_KEY=your_groq_api_key_here
-GROQ_MODEL=llama-3.1-8b-instant
+```bash
+cp .env.example .env
 ```
 
-Optional values can also be configured for retrieval tuning and storage:
+Set your credentials in `.env`:
 
 ```env
+GROQ_API_KEY=gsk_your_groq_api_key_here
+GROQ_MODEL=llama-3.1-8b-instant
 CHROMA_DB_DIR=./chroma_db
 CHROMA_COLLECTION_NAME=advanced_hybrid_rag
 EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
+DEVICE=cpu
+
+# Retrieval & Reranker Tuning
 CHUNK_SIZE=1000
 CHUNK_OVERLAP=200
 DENSE_K=12
 SPARSE_K=12
+DENSE_WEIGHT=0.5
+SPARSE_WEIGHT=0.5
 RERANK_TOP_N=4
+TEMPERATURE=0.1
 ```
+
+---
 
 ## Running the Application
 
-Start the Streamlit app:
+### Option A: Streamlit Web UI
 
 ```bash
 streamlit run app.py
 ```
+Access the application at `http://localhost:8501`.
 
-Then open the local Streamlit URL shown in the terminal, typically:
+1. Upload a PDF in the sidebar (or use the preloaded `data/financial_report.pdf`).
+2. Adjust retrieval depth and temperature sliders in real time.
+3. Chat with the document and inspect reranked candidate chunks with cross-encoder relevance scores.
 
-```text
-http://localhost:8501
-```
+### Option B: FastAPI Backend
 
-## How to Use It
-
-- Upload a PDF document from the sidebar.
-- Ask a question about the document in the chat input.
-- Review the generated answer and the page citations shown in the output.
-- Inspect the retrieved chunks to understand which sections influenced the final response.
-
-## Development and Validation
-
-Run the automated tests:
+Start the API server with Uvicorn:
 
 ```bash
-python -m pytest -q
+uvicorn src.api:app --host 0.0.0.0 --port 8000 --reload
+```
+Interactive OpenAPI documentation will be available at `http://localhost:8000/docs`.
+
+#### API Usage Examples:
+
+**1. Health Check:**
+```bash
+curl http://localhost:8000/health
 ```
 
-The project includes CI via GitHub Actions to validate the codebase on pushes and pull requests.
+**2. Upload a Document:**
+```bash
+curl -X POST "http://localhost:8000/upload" \
+  -F "file=@data/financial_report.pdf"
+```
 
-## Technology Stack
+**3. Query Document:**
+```bash
+curl -X POST "http://localhost:8000/query" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "What was the total revenue in Q4 2025?",
+    "document_path": "data/financial_report.pdf",
+    "chat_history": []
+  }'
+```
 
-- **Frontend:** Streamlit
-- **PDF parsing:** PyMuPDF
-- **Embeddings:** sentence-transformers
-- **Vector search:** Chroma
-- **Keyword search:** BM25
-- **Reranking:** FlashRank
-- **LLM inference:** Groq
-- **Framework:** LangChain
+**4. Stream Responses (Server-Sent Events):**
+```bash
+curl -N -X POST "http://localhost:8000/stream" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "Summarize the financial highlights.",
+    "document_path": "data/financial_report.pdf",
+    "chat_history": []
+  }'
+```
 
-## Summary
+---
 
-This project provides a practical hybrid RAG workflow for document-grounded question answering. It is designed to help users extract precise answers from large PDFs in a way that is explainable, traceable, and easy to interact with from a browser interface.
+## Running with Docker Compose
+
+Spin up both the Streamlit UI and the FastAPI backend in isolated containers:
+
+```bash
+docker compose up --build
+```
+
+- **Streamlit Web UI:** `http://localhost:8501`
+- **FastAPI Documentation:** `http://localhost:8000/docs`
+
+---
+
+## Automated Evaluation & Benchmarking
+
+The project includes an evaluation framework in `src/evaluate.py` to benchmark groundedness, citation accuracy, and retrieval hit-rates:
+
+```bash
+python -m src.evaluate --pdf data/financial_report.pdf --output evaluation_report.json
+```
+
+Sample output:
+```text
+--- Evaluation Results ---
+Total Questions Evaluated: 3
+Citation Accuracy:        100.00%
+Retrieval Hit Rate:       100.00%
+Lexical Overlap Score:    78.40%
+```
+
+---
+
+## Running Automated Tests
+
+Run the full automated test suite (unit tests, integration tests, and API tests):
+
+```bash
+python -m pytest
+```
+
+Configuration and test path exclusions are managed via [`pyproject.toml`](file:///d:/Documents/advanced-hybrid-rag/pyproject.toml).
+
+---
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.

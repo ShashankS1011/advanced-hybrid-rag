@@ -1,0 +1,6 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = [".venv", "venv", "chroma_db", ".git", "__pycache__", "data", "build", "dist"]
+python_files = ["test_*.py"]
+addopts = "-ra -q --ignore=venv --ignore=.venv"
+

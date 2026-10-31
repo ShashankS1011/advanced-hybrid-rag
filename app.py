@@ -1,5 +1,6 @@
 import logging
 import os
+from pathlib import Path
 
 # CPU Thread Optimization
 os.environ["OMP_NUM_THREADS"] = "2"
@@ -9,6 +10,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 import streamlit as st
 
 from src.config import settings
+from src.ingest import compute_file_hash
 from src.pipeline import RAGPipeline
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -24,13 +26,37 @@ with st.sidebar:
     uploaded_file = st.file_uploader("Upload a PDF Document", type=["pdf"])
 
     st.markdown("---")
+    st.header("Retrieval Settings")
+    rerank_top_n = st.slider(
+        "Rerank Top N Chunks",
+        min_value=1,
+        max_value=10,
+        value=settings.RERANK_TOP_N,
+    )
+    temperature = st.slider(
+        "LLM Temperature",
+        min_value=0.0,
+        max_value=1.0,
+        value=settings.TEMPERATURE,
+        step=0.05,
+    )
+    settings.RERANK_TOP_N = rerank_top_n
+    settings.TEMPERATURE = temperature
+
+    st.markdown("---")
+    if st.button("Clear Conversation"):
+        st.session_state.messages = []
+        st.rerun()
+
+    st.markdown("---")
     st.markdown("### Active Features")
     st.markdown(
         """
-    * **Parsing:** PyMuPDF (Page-level Metadata)
+    * **Parsing:** PyMuPDF + Table Detection
     * **Embeddings:** `all-MiniLM-L6-v2`
     * **Retrieval:** BM25 + Vector Hybrid Search
     * **Reranker:** `FlashRank` Cross-Encoder
+    * **Memory:** Conversational Query Reformulation
     * **Generation:** Groq Streaming API (`llama-3.1-8b-instant`)
     """
     )
@@ -47,14 +73,20 @@ def validate_startup() -> bool:
 
 
 pdf_path = None
+doc_hash = ""
+
 if uploaded_file is not None:
     os.makedirs("data", exist_ok=True)
-    pdf_path = os.path.join("data", uploaded_file.name)
+    # Sanitize uploaded filename to prevent directory traversal
+    safe_name = Path(uploaded_file.name).name
+    pdf_path = os.path.join("data", safe_name)
     with open(pdf_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
-    st.sidebar.success(f"File active: `{uploaded_file.name}`")
+    doc_hash = compute_file_hash(pdf_path)
+    st.sidebar.success(f"File active: `{safe_name}` (ID: `{doc_hash}`)")
 elif os.path.exists("data/financial_report.pdf"):
     pdf_path = "data/financial_report.pdf"
+    doc_hash = compute_file_hash(pdf_path)
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -64,8 +96,8 @@ for message in st.session_state.messages:
         st.markdown(message["content"])
 
 
-@st.cache_resource(show_spinner="Indexing and initializing FlashRank reranker...")
-def get_pipeline(path: str):
+@st.cache_resource(show_spinner="Indexing document and initializing FlashRank reranker...")
+def get_pipeline(path: str, content_hash: str):
     return RAGPipeline(path)
 
 
@@ -75,7 +107,11 @@ if not validate_startup():
 
 if pdf_path and os.path.exists(pdf_path):
     try:
-        pipeline = get_pipeline(pdf_path)
+        pipeline = get_pipeline(pdf_path, doc_hash)
+        st.sidebar.info(
+            f"**Pages:** {pipeline.metrics.get('document_pages', 1)} | "
+            f"**Chunks:** {pipeline.metrics.get('chunks_created', 1)}"
+        )
 
         if user_query := st.chat_input("Ask a question about your document..."):
             st.session_state.messages.append({"role": "user", "content": user_query})
@@ -85,7 +121,7 @@ if pdf_path and os.path.exists(pdf_path):
             with st.chat_message("assistant"):
                 try:
                     with st.spinner("Searching and reranking top candidates with FlashRank..."):
-                        docs = pipeline.retrieve_chunks(user_query)
+                        docs = pipeline.retrieve_chunks(user_query, st.session_state.messages[:-1])
 
                     if not docs:
                         no_results = "No relevant chunks were found for that question. Try rephrasing it or improve the document coverage."
@@ -102,22 +138,28 @@ if pdf_path and os.path.exists(pdf_path):
                             {
                                 "file": file_name,
                                 "page": page_num,
-                                "score": f"{score:.4f}" if score else "N/A",
+                                "score": f"{score:.4f}" if score is not None else "N/A",
                                 "text": doc.page_content,
                             }
                         )
 
-                    response_generator = pipeline.stream_answer(user_query, docs)
+                    response_generator = pipeline.stream_answer(
+                        user_query,
+                        docs,
+                        st.session_state.messages[:-1],
+                    )
                     full_answer = st.write_stream(response_generator)
 
                     pages = sorted(list({s["page"] for s in sources_info if s["page"] != "N/A"}))
                     pages_str = ", ".join([f"Page {p}" for p in pages])
-                    citation_footer = f"\n\n**Sources:** `{sources_info[0]['file']}` ({pages_str})" if sources_info else "\n\n**Sources:** `Document` (N/A)"
+                    source_files = sorted(list({s["file"] for s in sources_info}))
+                    files_str = ", ".join([f"`{f}`" for f in source_files])
+                    citation_footer = f"\n\n**Sources:** {files_str} ({pages_str})" if sources_info else "\n\n**Sources:** `Document` (N/A)"
                     st.markdown(citation_footer)
 
                     with st.expander("Inspect Re-ranked Search Chunks & FlashRank Scores"):
                         for idx, s in enumerate(sources_info, 1):
-                            st.markdown(f"**Chunk #{idx} | Page {s['page']} | Relevance Score: `{s['score']}`**")
+                            st.markdown(f"**Chunk #{idx} | {s['file']} | Page {s['page']} | Relevance Score: `{s['score']}`**")
                             st.caption(s["text"][:300] + "...")
                             st.divider()
 
