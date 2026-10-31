@@ -20,7 +20,7 @@ flashrank>=0.2.0
 
 # Evaluation
 ragas>=0.1.0
-datasets>=2.19.0
+datasets>=5.1.0
 
 # API & Web UI
 fastapi>=0.110.0
