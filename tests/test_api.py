@@ -92,3 +92,14 @@ def test_stream_endpoint_with_mock_pipeline():
     assert "Cash " in content
     assert "[DONE]" in content
 
+
+def test_query_rejects_path_traversal():
+    payload = {
+        "question": "What is here?",
+        "document_path": "../../etc/passwd",
+        "chat_history": [],
+    }
+    response = client.post("/query", json=payload)
+    assert response.status_code == 400
+
+

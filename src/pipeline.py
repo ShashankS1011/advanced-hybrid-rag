@@ -50,19 +50,20 @@ class RAGPipeline:
 
     def __init__(self, document_path: str):
         settings.validate_runtime_configuration()
-        if not os.path.exists(document_path):
-            raise FileNotFoundError(f"File not found: {document_path}")
+        safe_path = os.path.realpath(str(document_path))
+        if not os.path.isfile(safe_path):
+            raise FileNotFoundError(f"File not found: {safe_path}")
 
         from src.ingest import DocumentIngestor
         from src.retriever import HybridRetrieverBuilder
 
         ingestor = DocumentIngestor()
-        docs = ingestor.load_pdf(document_path)
+        docs = ingestor.load_pdf(safe_path)
         self.chunks = ingestor.chunk_documents(docs)
         if not self.chunks:
             raise ValueError("No content could be extracted from the provided PDF.")
 
-        self.document_path = str(document_path)
+        self.document_path = safe_path
         self.doc_id = self.chunks[0].metadata.get("doc_id", "default")
         builder = HybridRetrieverBuilder(self.chunks)
         self.retriever = builder.get_hybrid_reranked_retriever()

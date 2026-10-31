@@ -42,8 +42,11 @@ def _format_table_as_markdown(table_data: list[list[str | None]]) -> str:
 
 def compute_file_hash(file_path: str | os.PathLike[str]) -> str:
     """Computes a quick SHA-256 hash of a file for identification and caching."""
+    resolved_path = os.path.realpath(str(file_path))
+    if not os.path.isfile(resolved_path):
+        raise FileNotFoundError(f"File not found: {resolved_path}")
     hasher = hashlib.sha256()
-    with open(file_path, "rb") as f:
+    with open(resolved_path, "rb") as f:
         while chunk := f.read(65536):
             hasher.update(chunk)
     return hasher.hexdigest()[:16]
@@ -75,8 +78,9 @@ class DocumentIngestor:
 
     def load_pdf(self, file_path: str | os.PathLike[str]) -> list[Document]:
         """Loads a PDF and returns page-level documents with table extraction and metadata."""
-        path = Path(file_path)
-        if not path.exists():
+        resolved_path = os.path.realpath(str(file_path))
+        path = Path(resolved_path)
+        if not path.is_file():
             raise FileNotFoundError(f"File not found: {path}")
         if path.suffix.lower() != ".pdf":
             raise ValueError(f"Only PDF files are supported: {path}")

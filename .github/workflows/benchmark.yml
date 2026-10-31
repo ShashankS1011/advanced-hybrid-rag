@@ -15,7 +15,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -36,7 +36,7 @@ jobs:
           python -m src.evaluate --pdf data/financial_report.pdf --output benchmark_report.json
 
       - name: Upload Benchmark Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rag-evaluation-report
           path: benchmark_report.json

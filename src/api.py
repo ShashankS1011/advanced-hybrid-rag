@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-from pathlib import Path
+from typing import Optional
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,6 +29,27 @@ app.add_middleware(
 
 # In-memory pipeline registry: doc_id -> RAGPipeline
 _PIPELINE_REGISTRY: dict[str, RAGPipeline] = {}
+DATA_DIR = os.path.realpath("data")
+
+
+def get_safe_data_path(user_input_path: str) -> str:
+    """
+    Sanitizes user-provided document paths to prevent path traversal (CWE-22 / CWE-73).
+    Extracts the file basename and ensures the resolved path is contained within DATA_DIR.
+    """
+    clean_name = os.path.basename(user_input_path.strip())
+    if not clean_name or not clean_name.lower().endswith(".pdf"):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid document path. Only PDF files located in data/ are accessible.",
+        )
+    safe_path = os.path.realpath(os.path.join(DATA_DIR, clean_name))
+    if not safe_path.startswith(DATA_DIR + os.sep) and safe_path != DATA_DIR:
+        raise HTTPException(
+            status_code=400,
+            detail="Security error: Path traversal attempt detected.",
+        )
+    return safe_path
 
 
 class Message(BaseModel):
@@ -39,14 +60,14 @@ class Message(BaseModel):
 class QueryRequest(BaseModel):
     question: str = Field(..., description="User query about the document")
     doc_id: str | None = Field(None, description="Document ID returned during upload")
-    document_path: str | None = Field(None, description="Path to PDF if doc_id not provided")
+    document_path: str | None = Field(None, description="Path or filename of PDF inside data/")
     chat_history: list[Message] = Field(default_factory=list, description="Prior conversation turns")
 
 
 class SourceItem(BaseModel):
     file: str
     page: int
-    score: float | None = None
+    score: Optional[float] = None
     text: str
 
 
@@ -69,20 +90,26 @@ def _get_or_create_pipeline(doc_id: str | None, doc_path: str | None) -> RAGPipe
     if doc_id and doc_id in _PIPELINE_REGISTRY:
         return _PIPELINE_REGISTRY[doc_id]
 
-    target_path = doc_path
-    if not target_path and doc_id:
+    if not doc_path and doc_id:
         # Search registry for matching doc_id
         for d_id, pipe in _PIPELINE_REGISTRY.items():
             if d_id == doc_id:
                 return pipe
 
-    if not target_path or not os.path.exists(target_path):
+    if not doc_path:
         raise HTTPException(
-            status_code=404,
-            detail="Document not found or not indexed. Please upload document first.",
+            status_code=400,
+            detail="Document not found. Please provide a valid doc_id or document_path.",
         )
 
-    pipeline = RAGPipeline(target_path)
+    safe_target_path = get_safe_data_path(doc_path)
+    if not os.path.isfile(safe_target_path):
+        raise HTTPException(
+            status_code=404,
+            detail=f"Document file not found: {os.path.basename(safe_target_path)}",
+        )
+
+    pipeline = RAGPipeline(safe_target_path)
     _PIPELINE_REGISTRY[pipeline.doc_id] = pipeline
     return pipeline
 
@@ -116,25 +143,21 @@ def list_documents():
 
 @app.post("/upload", response_model=DocumentInfo)
 async def upload_document(file: UploadFile = File(...)):
-    # Sanitize filename
-    safe_filename = Path(file.filename or "upload.pdf").name
-    if not safe_filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+    raw_filename = file.filename or "upload.pdf"
+    safe_destination = get_safe_data_path(raw_filename)
 
-    os.makedirs("data", exist_ok=True)
-    destination_path = os.path.join("data", safe_filename)
-
+    os.makedirs(DATA_DIR, exist_ok=True)
     contents = await file.read()
-    with open(destination_path, "wb") as f:
+    with open(safe_destination, "wb") as f:
         f.write(contents)
 
     try:
-        pipeline = RAGPipeline(destination_path)
+        pipeline = RAGPipeline(safe_destination)
         _PIPELINE_REGISTRY[pipeline.doc_id] = pipeline
         return DocumentInfo(
             doc_id=pipeline.doc_id,
-            filename=safe_filename,
-            path=destination_path,
+            filename=os.path.basename(safe_destination),
+            path=safe_destination,
             pages=pipeline.metrics.get("document_pages", 0),
             chunks=pipeline.metrics.get("chunks_created", 0),
         )
@@ -180,4 +203,3 @@ def stream_document_query(req: QueryRequest):
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
-
