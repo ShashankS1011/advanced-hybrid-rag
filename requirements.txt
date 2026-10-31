@@ -24,7 +24,7 @@ datasets>=2.19.0
 
 # API & Web UI
 fastapi>=0.110.0
-uvicorn>=0.29.0
+uvicorn>=0.54.0
 python-multipart>=0.0.9
 streamlit>=1.35.0
 pydantic>=2.7.0
