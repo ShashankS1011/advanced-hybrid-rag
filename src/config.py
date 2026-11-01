@@ -41,7 +41,9 @@ class Settings:
 
     def __post_init__(self) -> None:
         self.ENABLE_QUERY_CACHE = os.getenv("ENABLE_QUERY_CACHE", "true").lower() in ("true", "1", "yes")
-        self.ENABLE_ADAPTIVE_RETRIEVAL = os.getenv("ENABLE_ADAPTIVE_RETRIEVAL", "true").lower() in ("true", "1", "yes")
+        self.ENABLE_ADAPTIVE_RETRIEVAL = (
+            os.getenv("ENABLE_ADAPTIVE_RETRIEVAL", "true").lower() in ("true", "1", "yes")
+        )
         self.GROQ_API_KEY = os.getenv("GROQ_API_KEY", self.GROQ_API_KEY).strip()
         if not self.GROQ_API_KEY:
             try:

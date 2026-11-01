@@ -233,8 +233,10 @@ class RAGPipeline:
         chat_history: list[dict] | None = None,
     ) -> dict[str, Any]:
         """Synchronous end-to-end generation returning answer text and source metadata."""
-        if settings.ENABLE_QUERY_CACHE and not chat_history:
-            cached = self.cache.get(self.doc_id, user_query)
+        cache = getattr(self, "cache", self._shared_cache)
+        doc_id = getattr(self, "doc_id", "default")
+        if settings.ENABLE_QUERY_CACHE and not chat_history and cache is not None:
+            cached = cache.get(doc_id, user_query)
             if cached is not None:
                 logger.info("Serving query='%s' from semantic cache", user_query)
                 cached_res = dict(cached)
@@ -273,7 +275,7 @@ class RAGPipeline:
             "query": user_query,
             "cached": False,
         }
-        if settings.ENABLE_QUERY_CACHE and not chat_history:
-            self.cache.set(self.doc_id, user_query, res)
+        if settings.ENABLE_QUERY_CACHE and not chat_history and cache is not None:
+            cache.set(doc_id, user_query, res)
 
         return res

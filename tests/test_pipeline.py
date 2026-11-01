@@ -8,7 +8,7 @@ from src.evaluate import (
     compute_token_overlap,
     evaluate_rag_pipeline,
 )
-from src.pipeline import RAGPipeline
+from src.pipeline import QueryCache, RAGPipeline
 
 
 @pytest.fixture
@@ -17,6 +17,7 @@ def mock_pipeline():
     pipeline.document_path = "data/financial_report.pdf"
     pipeline.doc_id = "test_doc_123"
     pipeline.metrics = {"document_pages": 1, "chunks_created": 3}
+    pipeline.cache = QueryCache()
 
     mock_llm = MagicMock()
     pipeline.llm = mock_llm
