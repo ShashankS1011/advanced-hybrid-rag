@@ -14,7 +14,9 @@ except ImportError:
         EnsembleRetriever,
     )
 
+from langchain_core.callbacks import CallbackManagerForRetrieverRun
 from langchain_core.documents import Document
+from langchain_core.retrievers import BaseRetriever
 from langchain_huggingface import HuggingFaceEmbeddings
 from rank_bm25 import BM25Okapi
 
@@ -23,20 +25,24 @@ from src.config import settings
 logger = logging.getLogger(__name__)
 
 
-class BM25RetrieverAdapter:
+class BM25RetrieverAdapter(BaseRetriever):
     """A lightweight BM25 retriever with score-based filtering."""
 
-    def __init__(self, documents: Sequence[Document], k: int):
-        self.documents = list(documents)
-        self.k = max(1, int(k))
+    documents: list[Document]
+    k: int = 12
+
+    def __init__(self, documents: Sequence[Document], k: int, **kwargs: Any):
+        super().__init__(documents=list(documents), k=max(1, int(k)), **kwargs)
         tokenized_docs = [self._tokenize(doc.page_content) for doc in self.documents]
-        self.bm25 = BM25Okapi(tokenized_docs)
+        object.__setattr__(self, "_bm25", BM25Okapi(tokenized_docs))
 
     @staticmethod
     def _tokenize(text: str) -> list[str]:
         return re.findall(r"\w+", (text or "").lower())
 
-    def invoke(self, query: str) -> list[Document]:
+    def _get_relevant_documents(
+        self, query: str, *, run_manager: CallbackManagerForRetrieverRun | None = None
+    ) -> list[Document]:
         if not query or not str(query).strip():
             return []
 
@@ -44,19 +50,26 @@ class BM25RetrieverAdapter:
         if not tokenized_query:
             return []
 
-        scores = self.bm25.get_scores(tokenized_query)
+        bm25 = getattr(self, "_bm25", None)
+        if bm25 is None:
+            tokenized_docs = [self._tokenize(doc.page_content) for doc in self.documents]
+            bm25 = BM25Okapi(tokenized_docs)
+            object.__setattr__(self, "_bm25", bm25)
+
+        scores = bm25.get_scores(tokenized_query)
         scored_pairs = [(idx, score) for idx, score in enumerate(scores) if score > 0.0]
+        if not scored_pairs:
+            q_set = set(tokenized_query)
+            scored_pairs = [
+                (idx, 1.0)
+                for idx, doc in enumerate(self.documents)
+                if q_set.intersection(self._tokenize(doc.page_content))
+            ]
         if not scored_pairs:
             return []
 
         ranked_pairs = sorted(scored_pairs, key=lambda pair: pair[1], reverse=True)[: self.k]
         return [self.documents[idx] for idx, _ in ranked_pairs]
-
-    def get_relevant_documents(self, query: str) -> list[Document]:
-        return self.invoke(query)
-
-    async def ainvoke(self, query: str) -> list[Document]:
-        return self.invoke(query)
 
 
 class HybridRetrieverBuilder:
