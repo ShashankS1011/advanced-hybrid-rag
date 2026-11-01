@@ -17,6 +17,15 @@ os.environ["OMP_NUM_THREADS"] = "2"
 os.environ["MKL_NUM_THREADS"] = "2"
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
+from dotenv import find_dotenv, load_dotenv
+
+BASE_DIR = Path(__file__).resolve().parent
+_env_file = BASE_DIR / ".env"
+if _env_file.exists():
+    load_dotenv(dotenv_path=_env_file, override=True)
+else:
+    load_dotenv(find_dotenv(), override=True)
+
 import streamlit as st
 
 from src.config import settings
@@ -29,20 +38,20 @@ st.set_page_config(
 )
 
 
-def resolve_api_key() -> str:
-    """Resolves Groq API key across session state, environment, and Streamlit secrets."""
+def resolve_api_key() -> tuple[str, str]:
+    """Resolves Groq API key and source across session state, environment/.env, and Streamlit secrets."""
     # 1. User manual input stored in session state
     if st.session_state.get("user_groq_key"):
         val = str(st.session_state["user_groq_key"]).strip()
         if val:
-            return val
+            return val, "User Session"
 
-    # 2. Settings / Environment variable
-    if settings.GROQ_API_KEY:
-        return settings.GROQ_API_KEY.strip()
+    # 2. Settings / Environment variable / .env file
+    if settings.GROQ_API_KEY and settings.GROQ_API_KEY.strip():
+        return settings.GROQ_API_KEY.strip(), "Environment / .env"
     env_key = os.getenv("GROQ_API_KEY", "").strip()
     if env_key:
-        return env_key
+        return env_key, "Environment / .env"
 
     # 3. Streamlit Cloud Secrets (exhaustive case-insensitive search across root keys and sub-sections)
     try:
@@ -59,7 +68,7 @@ def resolve_api_key() -> str:
             for k in possible_keys:
                 try:
                     if k in st.secrets and str(st.secrets[k]).strip():
-                        return str(st.secrets[k]).strip()
+                        return str(st.secrets[k]).strip(), "Streamlit Secrets"
                 except Exception:
                     pass
 
@@ -69,17 +78,17 @@ def resolve_api_key() -> str:
                     if hasattr(sec, "get") or isinstance(sec, dict):
                         for k in possible_keys:
                             if k in sec and str(sec[k]).strip():
-                                return str(sec[k]).strip()
+                                return str(sec[k]).strip(), "Streamlit Secrets"
                 except Exception:
                     pass
     except Exception:
         pass
 
-    return ""
+    return "", ""
 
 
 # Synchronize active API key
-active_key = resolve_api_key()
+active_key, key_source = resolve_api_key()
 if active_key:
     settings.GROQ_API_KEY = active_key
     os.environ["GROQ_API_KEY"] = active_key
@@ -99,7 +108,6 @@ if usage_tracker.get("date") != today_str:
     usage_tracker["date"] = today_str
     usage_tracker["count"] = 0
 
-BASE_DIR = Path(__file__).resolve().parent
 default_pdf = BASE_DIR / "data" / "financial_report.pdf"
 
 # --- Sidebar Configuration ---
@@ -107,29 +115,53 @@ with st.sidebar:
     st.title("Control Panel")
 
     st.subheader("API Configuration")
-    entered_key = st.text_input(
-        "Groq API Key",
-        value=st.session_state.get("user_groq_key", ""),
-        type="password",
-        placeholder="gsk_...",
-        help="Provide your own Groq API key from https://console.groq.com to bypass shared quotas.",
-        key="api_key_input",
-    )
-    if entered_key and entered_key.strip() != st.session_state.get("user_groq_key", ""):
-        st.session_state["user_groq_key"] = entered_key.strip()
-        settings.GROQ_API_KEY = entered_key.strip()
-        os.environ["GROQ_API_KEY"] = entered_key.strip()
-        active_key = entered_key.strip()
-        st.rerun()
-
     if active_key:
         masked = f"{active_key[:6]}...{active_key[-4:]}" if len(active_key) > 12 else "Configured"
         st.success(f"API Key Active: {masked}")
-        if not st.session_state.get("user_groq_key"):
+        st.caption(f"Source: {key_source}")
+        if key_source != "User Session":
             remaining = max(0, settings.DAILY_GLOBAL_QUERY_LIMIT - usage_tracker["count"])
             st.caption(f"Shared Demo Quota: {remaining}/{settings.DAILY_GLOBAL_QUERY_LIMIT} queries remaining today")
+
+        with st.expander("Custom Key Override (Optional)"):
+            st.caption(
+                "A system key is already active. You can supply your own Groq key below to bypass shared quotas."
+            )
+            entered_key = st.text_input(
+                "Groq API Key Override",
+                value=st.session_state.get("user_groq_key", ""),
+                type="password",
+                placeholder="gsk_...",
+                key="api_key_override_input",
+            )
+            if entered_key and entered_key.strip() != st.session_state.get("user_groq_key", ""):
+                st.session_state["user_groq_key"] = entered_key.strip()
+                settings.GROQ_API_KEY = entered_key.strip()
+                os.environ["GROQ_API_KEY"] = entered_key.strip()
+                st.rerun()
+            elif not entered_key and st.session_state.get("user_groq_key"):
+                st.session_state.pop("user_groq_key", None)
+                st.rerun()
     else:
-        st.warning("No API Key detected. Please enter your Groq API key above.")
+        st.warning("No API Key detected.")
+        st.markdown(
+            "**To activate:**\n"
+            "* Enter your free Groq API key below for this session, **or**\n"
+            '* Add `GROQ_API_KEY = "gsk_..."` in **Streamlit Cloud > App Settings > Secrets**.'
+        )
+        entered_key = st.text_input(
+            "Groq API Key",
+            value=st.session_state.get("user_groq_key", ""),
+            type="password",
+            placeholder="gsk_...",
+            help="Free Groq API key from https://console.groq.com",
+            key="api_key_input",
+        )
+        if entered_key and entered_key.strip() != st.session_state.get("user_groq_key", ""):
+            st.session_state["user_groq_key"] = entered_key.strip()
+            settings.GROQ_API_KEY = entered_key.strip()
+            os.environ["GROQ_API_KEY"] = entered_key.strip()
+            st.rerun()
 
     st.markdown("---")
     st.subheader("Document Management")
@@ -262,7 +294,9 @@ if pdf_path and os.path.exists(pdf_path):
         if user_query:
             # Check API Key availability
             if not active_key:
-                st.warning("Please configure your Groq API Key in the sidebar to run queries.")
+                st.warning(
+                    "Please configure your Groq API Key in the sidebar or configure GROQ_API_KEY in Streamlit Cloud Secrets to run queries."
+                )
                 st.stop()
 
             # Safety Guardrail 1: Question length

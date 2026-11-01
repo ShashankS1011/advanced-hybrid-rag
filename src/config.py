@@ -1,9 +1,15 @@
 import os
 from dataclasses import dataclass
+from pathlib import Path
 
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 
-load_dotenv()
+_BASE_DIR = Path(__file__).resolve().parent.parent
+_env_path = _BASE_DIR / ".env"
+if _env_path.exists():
+    load_dotenv(dotenv_path=_env_path, override=True)
+else:
+    load_dotenv(find_dotenv(), override=True)
 
 
 @dataclass
