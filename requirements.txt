@@ -11,7 +11,7 @@ langchain-text-splitters>=1.1.3
 
 # Ingestion & PDF Parsing
 pymupdf>=1.24.0
-pypdf>=4.0.0
+pypdf>=6.21.4
 reportlab>=4.0.0
 
 # Hybrid Search & Reranking
