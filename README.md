@@ -1,7 +1,7 @@
 # Advanced Production Hybrid RAG Engine
 
 [![CI](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/ci.yml)
-[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://advanced-hybrid-rag.streamlit.app)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://shashanks1011-advanced-hybrid-rag-app-sofcpx.streamlit.app/)
 [![CodeQL Analysis](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/codeql.yml/badge.svg)](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/codeql.yml)
 [![Lint & Quality](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/lint.yml/badge.svg)](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/lint.yml)
 [![Docker Build](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/docker.yml/badge.svg)](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/docker.yml)
@@ -20,7 +20,7 @@ The engine integrates **table-aware document ingestion**, **isolated hybrid retr
 
 Access and test the full application immediately in your web browser without downloading or installing anything:
 
-**[Launch Streamlit Live Web App](https://advanced-hybrid-rag.streamlit.app)**
+**[Launch Streamlit Live Web App](https://shashanks1011-advanced-hybrid-rag-app-sofcpx.streamlit.app/)**
 
 > **Quick Start in the Web App:**
 > 1. The demo is preloaded with a sample financial report (`financial_report.pdf`). You can start querying immediately or upload your own PDF in the sidebar.
@@ -181,7 +181,7 @@ TEMPERATURE=0.1
 ### Option A: Streamlit Cloud (Zero Setup)
 
 Launch and interact with the system directly from your web browser without downloading or installing any dependencies:
-- **Direct Live App:** [advanced-hybrid-rag.streamlit.app](https://advanced-hybrid-rag.streamlit.app)
+- **Direct Live App:** [shashanks1011-advanced-hybrid-rag-app-sofcpx.streamlit.app](https://shashanks1011-advanced-hybrid-rag-app-sofcpx.streamlit.app/)
 - **1-Click Deploy:** Click below to deploy your own instance on Streamlit Community Cloud:
 
   [![Deploy to Streamlit Cloud](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/deploy?repository=ShashankS1011/advanced-hybrid-rag&branch=main&mainModule=app.py)

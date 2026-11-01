@@ -74,11 +74,12 @@ class RAGPipeline:
             "doc_id": self.doc_id,
         }
 
-    def _build_llm(self) -> ChatGroq:
+    def _build_llm(self, max_tokens: int | None = None) -> ChatGroq:
         return ChatGroq(
             groq_api_key=settings.GROQ_API_KEY,
             model_name=settings.GROQ_MODEL,
             temperature=settings.TEMPERATURE,
+            max_tokens=max_tokens or settings.MAX_OUTPUT_TOKENS,
             streaming=True,
         )
 
@@ -108,7 +109,8 @@ class RAGPipeline:
 
         formatted_history = "\n".join(history_lines)
         try:
-            chain = CONDENSE_QUESTION_PROMPT | self.llm | StrOutputParser()
+            condense_llm = self._build_llm(max_tokens=128)
+            chain = CONDENSE_QUESTION_PROMPT | condense_llm | StrOutputParser()
             standalone = chain.invoke({"chat_history": formatted_history, "question": user_query})
             standalone_cleaned = standalone.strip()
             logger.info("Rephrased query from '%s' to '%s'", user_query, standalone_cleaned)

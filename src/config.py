@@ -25,6 +25,11 @@ class Settings:
     RERANK_MODEL: str = "ms-marco-TinyBERT-L-2-v2"
     DEVICE: str = "cpu"
     SCORE_THRESHOLD: float = 0.0
+    MAX_OUTPUT_TOKENS: int = 1024
+    MAX_QUERY_LENGTH: int = 500
+    MAX_SESSION_QUERIES: int = 25
+    RATE_LIMIT_SECONDS: float = 2.5
+    DAILY_GLOBAL_QUERY_LIMIT: int = 150
 
     def __post_init__(self) -> None:
         self.GROQ_API_KEY = os.getenv("GROQ_API_KEY", self.GROQ_API_KEY).strip()
@@ -49,6 +54,11 @@ class Settings:
         self.RERANK_MODEL = os.getenv("RERANK_MODEL", self.RERANK_MODEL).strip()
         self.DEVICE = os.getenv("DEVICE", self.DEVICE).strip()
         self.SCORE_THRESHOLD = float(os.getenv("SCORE_THRESHOLD", self.SCORE_THRESHOLD))
+        self.MAX_OUTPUT_TOKENS = int(os.getenv("MAX_OUTPUT_TOKENS", self.MAX_OUTPUT_TOKENS))
+        self.MAX_QUERY_LENGTH = int(os.getenv("MAX_QUERY_LENGTH", self.MAX_QUERY_LENGTH))
+        self.MAX_SESSION_QUERIES = int(os.getenv("MAX_SESSION_QUERIES", self.MAX_SESSION_QUERIES))
+        self.RATE_LIMIT_SECONDS = float(os.getenv("RATE_LIMIT_SECONDS", self.RATE_LIMIT_SECONDS))
+        self.DAILY_GLOBAL_QUERY_LIMIT = int(os.getenv("DAILY_GLOBAL_QUERY_LIMIT", self.DAILY_GLOBAL_QUERY_LIMIT))
 
         self._validate()
 
@@ -73,6 +83,16 @@ class Settings:
             raise ValueError("SPARSE_WEIGHT must be between 0.0 and 1.0.")
         if not (0.0 <= self.TEMPERATURE <= 2.0):
             raise ValueError("TEMPERATURE must be between 0.0 and 2.0.")
+        if self.MAX_OUTPUT_TOKENS <= 0:
+            raise ValueError("MAX_OUTPUT_TOKENS must be greater than zero.")
+        if self.MAX_QUERY_LENGTH <= 0:
+            raise ValueError("MAX_QUERY_LENGTH must be greater than zero.")
+        if self.MAX_SESSION_QUERIES <= 0:
+            raise ValueError("MAX_SESSION_QUERIES must be greater than zero.")
+        if self.RATE_LIMIT_SECONDS < 0:
+            raise ValueError("RATE_LIMIT_SECONDS cannot be negative.")
+        if self.DAILY_GLOBAL_QUERY_LIMIT <= 0:
+            raise ValueError("DAILY_GLOBAL_QUERY_LIMIT must be greater than zero.")
 
     def validate_runtime_configuration(self) -> None:
         if not self.GROQ_API_KEY:
