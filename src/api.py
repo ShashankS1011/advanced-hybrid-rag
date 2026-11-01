@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from src.config import settings
 from src.pipeline import RAGPipeline
+from src.security import check_prompt_security
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +76,9 @@ class QueryRequest(BaseModel):
         clean = v.strip()
         if not clean:
             raise ValueError("Question cannot be empty or whitespace.")
+        sec_result = check_prompt_security(clean, max_length=settings.MAX_QUERY_LENGTH)
+        if not sec_result.is_safe:
+            raise ValueError(sec_result.reason)
         return clean
 
 

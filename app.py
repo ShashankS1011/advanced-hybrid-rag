@@ -30,6 +30,7 @@ import streamlit as st
 
 from src.config import settings
 from src.ingest import compute_file_hash
+from src.security import check_prompt_security, sanitize_error_message
 
 st.set_page_config(
     page_title="Production Hybrid RAG Engine",
@@ -38,22 +39,16 @@ st.set_page_config(
 )
 
 
-def resolve_api_key() -> tuple[str, str]:
-    """Resolves Groq API key and source across session state, environment/.env, and Streamlit secrets."""
-    # 1. User manual input stored in session state
-    if st.session_state.get("user_groq_key"):
-        val = str(st.session_state["user_groq_key"]).strip()
-        if val:
-            return val, "User Session"
-
-    # 2. Settings / Environment variable / .env file
+def resolve_api_key() -> str:
+    """Resolves Groq API key strictly from the host environment / .env file or Streamlit secrets."""
+    # 1. Settings / Environment variable / .env file
     if settings.GROQ_API_KEY and settings.GROQ_API_KEY.strip():
-        return settings.GROQ_API_KEY.strip(), "Environment / .env"
+        return settings.GROQ_API_KEY.strip()
     env_key = os.getenv("GROQ_API_KEY", "").strip()
     if env_key:
-        return env_key, "Environment / .env"
+        return env_key
 
-    # 3. Streamlit Cloud Secrets (exhaustive case-insensitive search across root keys and sub-sections)
+    # 2. Streamlit Cloud Secrets (exhaustive case-insensitive search across root keys and sub-sections)
     try:
         if hasattr(st, "secrets"):
             possible_keys = [
@@ -68,7 +63,7 @@ def resolve_api_key() -> tuple[str, str]:
             for k in possible_keys:
                 try:
                     if k in st.secrets and str(st.secrets[k]).strip():
-                        return str(st.secrets[k]).strip(), "Streamlit Secrets"
+                        return str(st.secrets[k]).strip()
                 except Exception:
                     pass
 
@@ -78,17 +73,17 @@ def resolve_api_key() -> tuple[str, str]:
                     if hasattr(sec, "get") or isinstance(sec, dict):
                         for k in possible_keys:
                             if k in sec and str(sec[k]).strip():
-                                return str(sec[k]).strip(), "Streamlit Secrets"
+                                return str(sec[k]).strip()
                 except Exception:
                     pass
     except Exception:
         pass
 
-    return "", ""
+    return ""
 
 
 # Synchronize active API key
-active_key, key_source = resolve_api_key()
+active_key = resolve_api_key()
 if active_key:
     settings.GROQ_API_KEY = active_key
     os.environ["GROQ_API_KEY"] = active_key
@@ -114,54 +109,15 @@ default_pdf = BASE_DIR / "data" / "financial_report.pdf"
 with st.sidebar:
     st.title("Control Panel")
 
-    st.subheader("API Configuration")
+    st.subheader("System & Security Status")
     if active_key:
-        masked = f"{active_key[:6]}...{active_key[-4:]}" if len(active_key) > 12 else "Configured"
-        st.success(f"API Key Active: {masked}")
-        st.caption(f"Source: {key_source}")
-        if key_source != "User Session":
-            remaining = max(0, settings.DAILY_GLOBAL_QUERY_LIMIT - usage_tracker["count"])
-            st.caption(f"Shared Demo Quota: {remaining}/{settings.DAILY_GLOBAL_QUERY_LIMIT} queries remaining today")
-
-        with st.expander("Custom Key Override (Optional)"):
-            st.caption(
-                "A system key is already active. You can supply your own Groq key below to bypass shared quotas."
-            )
-            entered_key = st.text_input(
-                "Groq API Key Override",
-                value=st.session_state.get("user_groq_key", ""),
-                type="password",
-                placeholder="gsk_...",
-                key="api_key_override_input",
-            )
-            if entered_key and entered_key.strip() != st.session_state.get("user_groq_key", ""):
-                st.session_state["user_groq_key"] = entered_key.strip()
-                settings.GROQ_API_KEY = entered_key.strip()
-                os.environ["GROQ_API_KEY"] = entered_key.strip()
-                st.rerun()
-            elif not entered_key and st.session_state.get("user_groq_key"):
-                st.session_state.pop("user_groq_key", None)
-                st.rerun()
+        st.success("API Status: Connected (Protected System Key)")
+        st.caption("Engine: Groq llama-3.1-8b-instant")
+        remaining = max(0, settings.DAILY_GLOBAL_QUERY_LIMIT - usage_tracker["count"])
+        st.caption(f"Daily Security Quota: {remaining}/{settings.DAILY_GLOBAL_QUERY_LIMIT} queries remaining")
     else:
-        st.warning("No API Key detected.")
-        st.markdown(
-            "**To activate:**\n"
-            "* Enter your free Groq API key below for this session, **or**\n"
-            '* Add `GROQ_API_KEY = "gsk_..."` in **Streamlit Cloud > App Settings > Secrets**.'
-        )
-        entered_key = st.text_input(
-            "Groq API Key",
-            value=st.session_state.get("user_groq_key", ""),
-            type="password",
-            placeholder="gsk_...",
-            help="Free Groq API key from https://console.groq.com",
-            key="api_key_input",
-        )
-        if entered_key and entered_key.strip() != st.session_state.get("user_groq_key", ""):
-            st.session_state["user_groq_key"] = entered_key.strip()
-            settings.GROQ_API_KEY = entered_key.strip()
-            os.environ["GROQ_API_KEY"] = entered_key.strip()
-            st.rerun()
+        st.error("API Status: Key Not Configured")
+        st.caption("Host environment must define GROQ_API_KEY in .env or deployment secrets.")
 
     st.markdown("---")
     st.subheader("Document Management")
@@ -292,46 +248,49 @@ if pdf_path and os.path.exists(pdf_path):
                 user_query = chat_input_text
 
         if user_query:
-            # Check API Key availability
+            # Check 1: API Key availability
             if not active_key:
-                st.warning(
-                    "Please configure your Groq API Key in the sidebar or configure GROQ_API_KEY in Streamlit Cloud Secrets to run queries."
-                )
+                st.error("System API Key is not configured in the host environment. Queries cannot be processed.")
                 st.stop()
 
-            # Safety Guardrail 1: Question length
-            if len(user_query.strip()) > settings.MAX_QUERY_LENGTH:
-                st.error(
-                    f"Question exceeds the limit of {settings.MAX_QUERY_LENGTH} characters. Please submit a shorter question."
-                )
+            # Security Guardrail 1: Adversarial Prompt Injection & Boundary Check
+            sec_check = check_prompt_security(user_query, max_length=settings.MAX_QUERY_LENGTH)
+            if not sec_check.is_safe:
+                st.error(sec_check.reason)
                 st.stop()
 
-            # Safety Guardrail 2: Request cooldown
+            # Security Guardrail 2: Duplicate Query Debounce
             now = time.time()
             last_time = st.session_state.get("last_query_time", 0.0)
+            last_query = st.session_state.get("last_query_text", "")
+            if last_query == user_query.strip() and (now - last_time) < 4.0:
+                st.warning("Duplicate query detected. Please wait before re-submitting identical requests.")
+                st.stop()
+
+            # Security Guardrail 3: Rate Limiting & Request Cooldown
             if (now - last_time) < settings.RATE_LIMIT_SECONDS:
                 st.warning(f"Rate limit active. Please wait {settings.RATE_LIMIT_SECONDS} seconds between requests.")
                 st.stop()
 
-            # Safety Guardrail 3: Cost and Quota protection for shared key
-            is_personal = bool(st.session_state.get("user_groq_key"))
-            if not is_personal:
-                if usage_tracker["count"] >= settings.DAILY_GLOBAL_QUERY_LIMIT:
-                    st.error(
-                        "Daily demo quota reached for this shared instance. "
-                        "To continue querying without limits, please provide your own free Groq API key in the sidebar."
-                    )
-                    st.stop()
+            # Security Guardrail 4: Per-Session Query Cap
+            session_count = st.session_state.get("session_queries", 0)
+            if session_count >= settings.MAX_SESSION_QUERIES:
+                st.error(
+                    f"Session query limit reached ({settings.MAX_SESSION_QUERIES} queries). "
+                    "Please refresh the session to continue."
+                )
+                st.stop()
 
-                session_count = st.session_state.get("session_queries", 0)
-                if session_count >= settings.MAX_SESSION_QUERIES:
-                    st.warning(
-                        f"Session limit of {settings.MAX_SESSION_QUERIES} queries reached for this demo. "
-                        "Please enter your own free Groq API key in the sidebar to continue querying."
-                    )
-                    st.stop()
+            # Security Guardrail 5: Global Daily Budget & Quota Ceiling
+            if usage_tracker["count"] >= settings.DAILY_GLOBAL_QUERY_LIMIT:
+                st.error(
+                    "Daily system query quota reached for this deployment. "
+                    "Queries are paused until the daily quota resets."
+                )
+                st.stop()
 
             st.session_state.last_query_time = now
+            st.session_state.last_query_text = user_query.strip()
             st.session_state.messages.append({"role": "user", "content": user_query})
 
             with st.chat_message("user"):
@@ -369,9 +328,8 @@ if pdf_path and os.path.exists(pdf_path):
                     )
                     full_answer = st.write_stream(response_generator)
 
-                    if not is_personal:
-                        usage_tracker["count"] += 1
-                        st.session_state.session_queries = st.session_state.get("session_queries", 0) + 1
+                    usage_tracker["count"] += 1
+                    st.session_state.session_queries = session_count + 1
 
                     pages = sorted({s["page"] for s in sources_info if s["page"] != "N/A"})
                     pages_str = ", ".join([f"Page {p}" for p in pages])
@@ -400,9 +358,9 @@ if pdf_path and os.path.exists(pdf_path):
                     )
                 except Exception as exc:
                     logger.exception("Search or generation failed")
-                    error_text = f"Search or generation failed: {exc}"
-                    st.error(error_text)
-                    st.session_state.messages.append({"role": "assistant", "content": error_text})
+                    safe_error = sanitize_error_message(exc)
+                    st.error(f"Search or generation failed: {safe_error}")
+                    st.session_state.messages.append({"role": "assistant", "content": f"Error: {safe_error}"})
 
     except Exception as exc:
         logger.exception("Error initializing the RAG pipeline")

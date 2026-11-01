@@ -24,7 +24,7 @@ Access and test the full application immediately in your web browser without dow
 
 > **Quick Start in the Web App:**
 > 1. The demo is preloaded with a sample financial report (`financial_report.pdf`). You can start querying immediately or upload your own PDF in the sidebar.
-> 2. Paste your free [Groq API Key](https://console.groq.com) into the sidebar configuration (or set it in Streamlit Cloud secrets).
+> 2. The application uses the secured host environment API key with built-in guardrails (daily quota, request cooldown, and adversarial injection filtering).
 > 3. To deploy your own private copy in 1 click for free:
 >
 > [![Deploy to Streamlit Cloud](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/deploy?repository=ShashankS1011/advanced-hybrid-rag&branch=main&mainModule=app.py)
