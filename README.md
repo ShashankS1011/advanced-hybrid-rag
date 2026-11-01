@@ -65,8 +65,11 @@ flowchart TD
 
 ## Key Features
 
-- **Table & Layout-Aware Ingestion:** Automatically detects tabular data in PDFs using PyMuPDF (`find_tables()`) and transforms rows into structured Markdown tables to preserve numeric integrity.
+- **Multi-Format Ingestion:** Ingests and parses complex documents across formats: native and layout-rich PDFs with PyMuPDF table detection, plain text (`.txt`), Markdown (`.md`), JSON, and structured spreadsheets (`.csv`, `.tsv`) converted into Markdown tables.
 - **Collection Isolation:** Dynamically namespaces vector database collections using document content hashes (`SHA-256`), eliminating cross-document contamination during hybrid search.
+- **Query-Adaptive Hybrid Retrieval (Dynamic Alpha):** Dynamically adjusts BM25 sparse and Chroma dense weights per query (e.g. tilting toward BM25 for numeric/financial metrics like "Q4 2025" or "$3.1M", and toward dense embeddings for conceptual summaries).
+- **Compound Query Decomposition:** Automatically breaks down complex multi-part questions into distinct sub-queries, retrieves candidates for each facet, and merges deduplicated evidence.
+- **Semantic Query Caching:** Features an in-memory query response cache to deliver sub-millisecond answers for repeated questions, eliminating redundant Groq API usage and saving token budget.
 - **Score-Filtered BM25:** Filters zero-score keyword matches to prevent non-matching documents from degrading hybrid search precision.
 - **Cross-Encoder Reranking:** Reorders retrieved candidate chunks using `FlashRank` (`ms-marco-TinyBERT-L-2-v2`) for superior semantic relevance before LLM context injection.
 - **Conversational Memory:** Uses chat history to reformulate ambiguous follow-up questions into self-contained search queries before retrieval.
@@ -76,8 +79,8 @@ flowchart TD
   - **Duplicate Request Debounce:** Prevents rapid re-submission spamming.
   - **Rate Limiting & Cooldown:** Enforces minimum request intervals (2.5s) per session.
   - **Cost & Quota Caps:** Caps per-session queries (25 max) and enforces daily global budget ceilings (150 max).
-  - **Credential Leakage Prevention:** Strips API keys (`gsk_...`), bearer tokens, and internal paths from all user-facing error messages.
-- **Strict In-Text Citations:** Enforces bracketed source references (e.g. `[Page 2]`) directly after every factual statement in the generated answer.
+  - **Credential Leakage Prevention:** Intercepts and transforms `401` and `429` error payloads while redacting API keys (`gsk_...`), bearer tokens, and internal paths from all user-facing error messages.
+- **Strict In-Text Citations & Audit Export:** Enforces bracketed source references (e.g. `[Page 2]`) directly after every factual statement, with an interactive citation inspector and 1-click Markdown audit report export.
 - **Dual Interfaces:**
   - **Streamlit Web UI:** Chat interface with dynamic parameter sliders, chunk inspection, and history management.
   - **FastAPI REST & Streaming Service:** Fully decoupled backend providing `/upload`, `/query`, and `/stream` (SSE) endpoints.
@@ -93,9 +96,9 @@ flowchart TD
 ├── src/
 │   ├── __init__.py
 │   ├── config.py          # Pydantic/dataclass runtime configuration & validation
-│   ├── ingest.py          # Table-aware PDF parsing & chunking
-│   ├── retriever.py       # Hybrid BM25 + Chroma retriever with FlashRank
-│   ├── pipeline.py        # Conversational RAG pipeline orchestration & streaming
+│   ├── ingest.py          # Multi-format parsing (PDF, TXT, MD, CSV) & table extraction
+│   ├── retriever.py       # Hybrid BM25 + Chroma retriever with adaptive weighting & FlashRank
+│   ├── pipeline.py        # Conversational RAG pipeline, decomposition, caching & streaming
 │   ├── security.py        # Prompt injection filter, rate limiting & error sanitization
 │   ├── evaluate.py        # Automated RAG evaluation & benchmarking suite
 │   └── api.py             # FastAPI REST & SSE streaming server
@@ -103,11 +106,20 @@ flowchart TD
 │   ├── test_core.py       # Unit tests for settings, ingestion, and retrievers
 │   ├── test_pipeline.py   # Tests for pipeline orchestration, memory, and evaluation
 │   ├── test_security.py   # Tests for prompt injection defense & sanitization
+│   ├── test_improvements.py # Tests for multi-format, caching, decomposition & adaptive weighting
 │   └── test_api.py        # Integration tests for FastAPI endpoints
 ├── data/                  # PDF storage directory
 ├── app.py                 # Interactive Streamlit web application
 ├── .streamlit/
 │   └── config.toml        # Production UI theme & server configuration
+├── Dockerfile             # Multi-stage production container build
+├── docker-compose.yml     # Multi-container orchestration (UI + API)
+├── pyproject.toml         # Pytest & package build configuration
+├── requirements.txt       # Production dependencies
+├── requirements-eval.txt  # Optional evaluation & benchmarking dependencies
+├── .env.example           # Environment configuration template
+└── README.md              # Project documentation
+```
 ├── Dockerfile             # Multi-stage production container build
 ├── docker-compose.yml     # Multi-container orchestration (UI + API)
 ├── pyproject.toml         # Pytest & package build configuration

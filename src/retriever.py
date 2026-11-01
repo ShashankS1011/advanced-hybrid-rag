@@ -33,6 +33,49 @@ from src.config import settings
 logger = logging.getLogger(__name__)
 
 
+def compute_adaptive_weights(
+    query: str, default_dense: float = 0.5, default_sparse: float = 0.5
+) -> tuple[float, float]:
+    """Analyzes query characteristics to dynamically balance dense semantic vs. sparse lexical search.
+
+    - Queries with exact numbers, currency, dates, or tabular financial metrics
+      tilt toward BM25 sparse lexical search (e.g. 0.3 dense / 0.7 sparse).
+    - Conceptual, explanatory, or thematic questions tilt toward Chroma dense vector search
+      (e.g. 0.7 dense / 0.3 sparse).
+    - General queries retain default configured weights.
+    """
+    if not query or not str(query).strip():
+        return default_dense, default_sparse
+
+    q_lower = query.lower()
+
+    # Numeric, currency, date, and exact metric indicators
+    has_numbers = bool(re.search(r"\b\d+(\.\d+)?%?\b", query))
+    has_currency = any(sym in query for sym in ["$", "€", "£", "¥", "usd", "eur", "inr"])
+    has_quarters = bool(re.search(r"\bq[1-4]\b|\bfy\d{2,4}\b", q_lower))
+    has_exact_metrics = bool(
+        re.search(
+            r"\b(net income|revenue|ebitda|margin|cash|expenses|balance|table|page|row|total|cost|price|shares)\b",
+            q_lower,
+        )
+    )
+
+    # Conceptual, summary, and strategic indicators
+    has_conceptual = bool(
+        re.search(
+            r"\b(why|how|explain|describe|summarize|summary|overview|strategy|outlook|risks|headwinds|implications|analysis)\b",
+            q_lower,
+        )
+    )
+
+    if (has_numbers or has_currency or has_quarters or has_exact_metrics) and not has_conceptual:
+        return 0.3, 0.7
+    elif has_conceptual and not (has_numbers or has_currency or has_quarters):
+        return 0.7, 0.3
+
+    return default_dense, default_sparse
+
+
 class BM25RetrieverAdapter(BaseRetriever):
     """A lightweight BM25 retriever with score-based filtering."""
 
@@ -125,12 +168,20 @@ class HybridRetrieverBuilder:
         """Initializes a BM25 keyword retriever without deprecated wrappers."""
         return BM25RetrieverAdapter(self.documents, settings.SPARSE_K)
 
-    def _build_fallback_retriever(self):
-        """Builds an uncompressed hybrid retriever using configured weights."""
+    def _build_fallback_retriever(self, query: str = ""):
+        """Builds a hybrid ensemble retriever using static or adaptive weights."""
         dense = self._build_dense_retriever()
         sparse = self._build_sparse_retriever()
-        weights = [settings.DENSE_WEIGHT, settings.SPARSE_WEIGHT]
+        if settings.ENABLE_ADAPTIVE_RETRIEVAL and query:
+            d_weight, s_weight = compute_adaptive_weights(query, settings.DENSE_WEIGHT, settings.SPARSE_WEIGHT)
+            weights = [d_weight, s_weight]
+        else:
+            weights = [settings.DENSE_WEIGHT, settings.SPARSE_WEIGHT]
         return EnsembleRetriever(retrievers=[dense, sparse], weights=weights)
+
+    def build_adaptive_ensemble(self, query: str = "") -> EnsembleRetriever:
+        """Explicitly builds an EnsembleRetriever with weights tuned to the query characteristics."""
+        return self._build_fallback_retriever(query)
 
     def get_hybrid_reranked_retriever(self) -> Any:
         """Combines dense + sparse retrievers and reranks top candidates with FlashRank."""

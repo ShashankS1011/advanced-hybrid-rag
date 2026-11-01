@@ -138,6 +138,93 @@ class DocumentIngestor:
         logger.info("Loaded %s pages from %s (hash: %s)", len(documents), path.name, doc_hash)
         return documents
 
+    def load_text(self, file_path: str | os.PathLike[str]) -> list[Document]:
+        """Loads a plain text, markdown, or JSON document."""
+        resolved_path = os.path.normpath(str(file_path))
+        path = Path(resolved_path)
+        if not path.is_file():
+            raise FileNotFoundError(f"File not found: {path}")
+
+        doc_hash = compute_file_hash(resolved_path)
+        try:
+            content = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            content = path.read_text(encoding="latin-1")
+
+        if not content.strip():
+            return []
+
+        return [
+            Document(
+                page_content=content.strip(),
+                metadata={
+                    "source": str(path),
+                    "source_file": path.name,
+                    "doc_id": doc_hash,
+                    "page": 0,
+                    "total_pages": 1,
+                    "format": path.suffix.lower().lstrip("."),
+                },
+            )
+        ]
+
+    def load_csv(self, file_path: str | os.PathLike[str]) -> list[Document]:
+        """Loads a CSV or TSV file and formats rows as a structured Markdown table."""
+        import csv
+
+        resolved_path = os.path.normpath(str(file_path))
+        path = Path(resolved_path)
+        if not path.is_file():
+            raise FileNotFoundError(f"File not found: {path}")
+
+        doc_hash = compute_file_hash(resolved_path)
+        rows: list[list[str]] = []
+        delimiter = "\t" if path.suffix.lower() == ".tsv" else ","
+        with open(resolved_path, "r", encoding="utf-8", errors="replace") as f:
+            reader = csv.reader(f, delimiter=delimiter)
+            for row in reader:
+                if row:
+                    rows.append(row)
+
+        if not rows:
+            return []
+
+        md_table = _format_table_as_markdown(rows)
+        summary_header = f"### Structured Dataset: {path.name} ({len(rows)} rows)\n\n"
+        return [
+            Document(
+                page_content=summary_header + md_table,
+                metadata={
+                    "source": str(path),
+                    "source_file": path.name,
+                    "doc_id": doc_hash,
+                    "page": 0,
+                    "total_pages": 1,
+                    "format": "csv",
+                },
+            )
+        ]
+
+    def load_document(self, file_path: str | os.PathLike[str]) -> list[Document]:
+        """Loads a document of any supported format (.pdf, .txt, .md, .csv, .tsv)."""
+        path = Path(file_path)
+        ext = path.suffix.lower()
+        if ext == ".pdf":
+            return self.load_pdf(file_path)
+        elif ext in (".txt", ".md", ".json"):
+            return self.load_text(file_path)
+        elif ext in (".csv", ".tsv"):
+            return self.load_csv(file_path)
+        else:
+            raise ValueError(f"Unsupported file format: {ext}. Supported formats: .pdf, .txt, .md, .csv, .tsv")
+
+    def load_documents(self, file_paths: list[str | os.PathLike[str]]) -> list[Document]:
+        """Loads multiple documents across diverse formats into a unified document collection."""
+        all_docs: list[Document] = []
+        for fp in file_paths:
+            all_docs.extend(self.load_document(fp))
+        return all_docs
+
     def chunk_documents(self, documents: list[Document]) -> list[Document]:
         """Splits documents into smaller chunks and preserves page/source metadata."""
         if not documents:

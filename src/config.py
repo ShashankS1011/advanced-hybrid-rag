@@ -36,8 +36,12 @@ class Settings:
     MAX_SESSION_QUERIES: int = 25
     RATE_LIMIT_SECONDS: float = 2.5
     DAILY_GLOBAL_QUERY_LIMIT: int = 150
+    ENABLE_QUERY_CACHE: bool = True
+    ENABLE_ADAPTIVE_RETRIEVAL: bool = True
 
     def __post_init__(self) -> None:
+        self.ENABLE_QUERY_CACHE = os.getenv("ENABLE_QUERY_CACHE", "true").lower() in ("true", "1", "yes")
+        self.ENABLE_ADAPTIVE_RETRIEVAL = os.getenv("ENABLE_ADAPTIVE_RETRIEVAL", "true").lower() in ("true", "1", "yes")
         self.GROQ_API_KEY = os.getenv("GROQ_API_KEY", self.GROQ_API_KEY).strip()
         if not self.GROQ_API_KEY:
             try:

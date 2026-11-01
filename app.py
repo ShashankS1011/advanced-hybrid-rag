@@ -121,10 +121,21 @@ with st.sidebar:
 
     st.markdown("---")
     st.subheader("Document Management")
-    uploaded_file = st.file_uploader("Upload Document (PDF)", type=["pdf"])
+    uploaded_file = st.file_uploader(
+        "Upload Document (PDF, TXT, MD, CSV)",
+        type=["pdf", "txt", "md", "csv", "tsv"],
+        help="Upload financial reports, contracts, datasets, or text files for instant indexing.",
+    )
 
     st.markdown("---")
     st.subheader("Retrieval Tuning")
+    adaptive_retrieval = st.toggle(
+        "Adaptive Hybrid Tuning",
+        value=settings.ENABLE_ADAPTIVE_RETRIEVAL,
+        help="Dynamically tilts search weights toward BM25 for numeric/table questions or toward dense vector embeddings for conceptual summaries.",
+    )
+    settings.ENABLE_ADAPTIVE_RETRIEVAL = adaptive_retrieval
+
     rerank_top_n = st.slider(
         "Rerank Top Chunks",
         min_value=1,
@@ -144,6 +155,21 @@ with st.sidebar:
     settings.TEMPERATURE = temperature
 
     st.markdown("---")
+    if st.session_state.get("messages"):
+        export_text = "# Conversation & Retrieval Audit Report\n\n"
+        export_text += f"**Document:** {st.session_state.get('active_doc_name', 'Document')}\n"
+        export_text += f"**Timestamp:** {datetime.datetime.now().isoformat()}\n\n---\n\n"
+        for msg in st.session_state.messages:
+            role = "User" if msg["role"] == "user" else "Assistant"
+            export_text += f"### {role}\n{msg['content']}\n\n"
+        st.download_button(
+            "Export Conversation & Citations",
+            data=export_text,
+            file_name=f"rag_audit_{datetime.date.today()}.md",
+            mime="text/markdown",
+            use_container_width=True,
+        )
+
     if st.button("Clear Conversation", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
@@ -152,17 +178,18 @@ with st.sidebar:
     st.subheader("Architecture Details")
     st.markdown(
         """
-    * **Ingestion:** PyMuPDF + Markdown Table Parsing
+    * **Ingestion:** PyMuPDF + Markdown Tables + Multi-Format
     * **Embeddings:** all-MiniLM-L6-v2 (CPU Optimized)
     * **Hybrid Retrieval:** BM25 (Lexical) + Chroma (Vector)
     * **Reranking:** FlashRank ms-marco-TinyBERT
+    * **Query Optimization:** Decomposition & Caching
     * **Generation:** Groq Streaming (llama-3.1-8b-instant)
     """
     )
 
 
 # --- Document Ingestion & Resolution ---
-pdf_path = None
+doc_path = None
 doc_hash = ""
 active_doc_name = ""
 
@@ -173,14 +200,16 @@ if uploaded_file is not None:
     target_file = data_dir / safe_name
     with open(target_file, "wb") as f:
         f.write(uploaded_file.getbuffer())
-    pdf_path = str(target_file)
-    doc_hash = compute_file_hash(pdf_path)
+    doc_path = str(target_file)
+    doc_hash = compute_file_hash(doc_path)
     active_doc_name = safe_name
+    st.session_state["active_doc_name"] = safe_name
     st.sidebar.info(f"Loaded: {safe_name} (ID: {doc_hash})")
 elif default_pdf.exists():
-    pdf_path = str(default_pdf)
-    doc_hash = compute_file_hash(pdf_path)
+    doc_path = str(default_pdf)
+    doc_hash = compute_file_hash(doc_path)
     active_doc_name = "financial_report.pdf"
+    st.session_state["active_doc_name"] = "financial_report.pdf"
     st.sidebar.info("Preloaded: financial_report.pdf (Acme Corp Q4)")
 
 
@@ -203,9 +232,9 @@ if not active_key:
         "To enable document querying, configure GROQ_API_KEY in your local .env file (for local runs) "
         "or in Streamlit Cloud > App Settings > Secrets (for cloud deployment)."
     )
-elif pdf_path and os.path.exists(pdf_path):
+elif doc_path and os.path.exists(doc_path):
     try:
-        pipeline = get_pipeline(pdf_path, doc_hash)
+        pipeline = get_pipeline(doc_path, doc_hash)
         doc_pages = pipeline.metrics.get("document_pages", 1)
         doc_chunks = pipeline.metrics.get("chunks_created", 1)
 
@@ -330,12 +359,14 @@ elif pdf_path and os.path.exists(pdf_path):
                             }
                         )
 
+                    gen_start = time.time()
                     response_generator = pipeline.stream_answer(
                         user_query,
                         docs,
                         st.session_state.messages[:-1],
                     )
                     full_answer = st.write_stream(response_generator)
+                    gen_elapsed = time.time() - gen_start
 
                     usage_tracker["count"] += 1
                     st.session_state.session_queries = session_count + 1
@@ -350,13 +381,19 @@ elif pdf_path and os.path.exists(pdf_path):
                         else "\n\n**Sources:** `Document` (N/A)"
                     )
                     st.markdown(citation_footer)
+                    adaptive_status = "Active" if settings.ENABLE_ADAPTIVE_RETRIEVAL else "Disabled"
+                    st.caption(
+                        f"Response Latency: {gen_elapsed:.2f}s | Chunks Reranked: {len(sources_info)} | "
+                        f"Adaptive Retrieval: {adaptive_status}"
+                    )
 
                     with st.expander("Inspect Re-ranked Search Chunks & FlashRank Relevance Scores"):
                         for idx, s in enumerate(sources_info, 1):
                             st.markdown(
-                                f"**Chunk #{idx} | {s['file']} | Page {s['page']} | Relevance Score: `{s['score']}`**"
+                                f"**Chunk #{idx} | `{s['file']}` | Page {s['page']} | Relevance Score: `{s['score']}`**"
                             )
-                            st.caption(s["text"][:300] + "...")
+                            snippet_text = s["text"][:350] + "..." if len(s["text"]) > 350 else s["text"]
+                            st.caption(snippet_text)
                             st.divider()
 
                     st.session_state.messages.append(

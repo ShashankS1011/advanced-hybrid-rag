@@ -46,8 +46,57 @@ Answer:"""
 )
 
 
+class QueryCache:
+    """Thread-safe in-memory cache for document query responses to avoid redundant LLM invocations."""
+
+    def __init__(self, max_size: int = 128):
+        self.max_size = max_size
+        self._cache: dict[tuple[str, str], dict[str, Any]] = {}
+
+    @staticmethod
+    def _normalize(query: str) -> str:
+        return " ".join((query or "").strip().lower().split())
+
+    def get(self, doc_id: str, query: str) -> dict[str, Any] | None:
+        key = (doc_id, self._normalize(query))
+        return self._cache.get(key)
+
+    def set(self, doc_id: str, query: str, data: dict[str, Any]) -> None:
+        if len(self._cache) >= self.max_size:
+            first_key = next(iter(self._cache))
+            self._cache.pop(first_key, None)
+        key = (doc_id, self._normalize(query))
+        self._cache[key] = data
+
+    def clear(self) -> None:
+        self._cache.clear()
+
+
+def decompose_query(query: str) -> list[str]:
+    """Decomposes compound questions with multiple inquiry clauses into distinct search sub-queries."""
+    clean = (query or "").strip()
+    if not clean:
+        return []
+
+    # Check for multiple question marks
+    if clean.count("?") > 1:
+        parts = [f"{p.strip()}?" for p in clean.split("?") if p.strip()]
+        if len(parts) > 1:
+            return parts
+
+    # Check for compound semicolons
+    if ";" in clean:
+        parts = [p.strip() for p in clean.split(";") if len(p.strip()) > 5]
+        if len(parts) > 1:
+            return parts
+
+    return [clean]
+
+
 class RAGPipeline:
     """End-to-End Hybrid RAG Pipeline with Conversational Context, Reranking & Streaming."""
+
+    _shared_cache = QueryCache()
 
     def __init__(self, document_path: str):
         settings.validate_runtime_configuration()
@@ -59,16 +108,17 @@ class RAGPipeline:
         from src.retriever import HybridRetrieverBuilder
 
         ingestor = DocumentIngestor()
-        docs = ingestor.load_pdf(safe_path)
+        docs = ingestor.load_document(safe_path)
         self.chunks = ingestor.chunk_documents(docs)
         if not self.chunks:
-            raise ValueError("No content could be extracted from the provided PDF.")
+            raise ValueError("No content could be extracted from the provided document.")
 
         self.document_path = safe_path
         self.doc_id = self.chunks[0].metadata.get("doc_id", "default")
         builder = HybridRetrieverBuilder(self.chunks)
         self.retriever = builder.get_hybrid_reranked_retriever()
         self.llm = self._build_llm()
+        self.cache = self._shared_cache
         self.metrics = {
             "document_pages": len(docs),
             "chunks_created": len(self.chunks),
@@ -126,8 +176,23 @@ class RAGPipeline:
             return []
 
         search_query = self.condense_query(query, chat_history) if chat_history else query.strip()
+        sub_queries = decompose_query(search_query)
+
         start = perf_counter()
-        results = self.retriever.invoke(search_query)
+        if len(sub_queries) > 1:
+            all_results: list[Any] = []
+            seen_texts: set[str] = set()
+            for sub_q in sub_queries:
+                sub_hits = self.retriever.invoke(sub_q)
+                for doc in sub_hits:
+                    content_sig = doc.page_content.strip()[:100]
+                    if content_sig not in seen_texts:
+                        seen_texts.add(content_sig)
+                        all_results.append(doc)
+            results = all_results[: settings.RERANK_TOP_N]
+        else:
+            results = self.retriever.invoke(search_query)
+
         elapsed_ms = (perf_counter() - start) * 1000
         logger.info("retrieval query='%s' hits=%s elapsed_ms=%.2f", search_query, len(results), elapsed_ms)
         return results
@@ -168,6 +233,14 @@ class RAGPipeline:
         chat_history: list[dict] | None = None,
     ) -> dict[str, Any]:
         """Synchronous end-to-end generation returning answer text and source metadata."""
+        if settings.ENABLE_QUERY_CACHE and not chat_history:
+            cached = self.cache.get(self.doc_id, user_query)
+            if cached is not None:
+                logger.info("Serving query='%s' from semantic cache", user_query)
+                cached_res = dict(cached)
+                cached_res["cached"] = True
+                return cached_res
+
         retrieved_docs = self.retrieve_chunks(user_query, chat_history)
         if not retrieved_docs:
             return {
@@ -175,6 +248,7 @@ class RAGPipeline:
                 "sources": [],
                 "retrieved_chunks": [],
                 "query": user_query,
+                "cached": False,
             }
 
         sources = []
@@ -192,9 +266,14 @@ class RAGPipeline:
         chain = QA_SYSTEM_PROMPT | self.llm | StrOutputParser()
         answer = chain.invoke({"context": formatted_context, "question": user_query})
 
-        return {
+        res = {
             "answer": answer.strip(),
             "sources": sources,
             "retrieved_chunks": retrieved_docs,
             "query": user_query,
+            "cached": False,
         }
+        if settings.ENABLE_QUERY_CACHE and not chat_history:
+            self.cache.set(self.doc_id, user_query, res)
+
+        return res
