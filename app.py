@@ -197,7 +197,13 @@ st.caption(
     "High-precision document Q&A combining BM25 keyword search, Chroma vector embeddings, FlashRank reranking, and Groq streaming."
 )
 
-if pdf_path and os.path.exists(pdf_path):
+if not active_key:
+    st.warning(
+        "API Key Notice: GROQ_API_KEY is not configured in the host environment or Streamlit Secrets. "
+        "To enable document querying, configure GROQ_API_KEY in your local .env file (for local runs) "
+        "or in Streamlit Cloud > App Settings > Secrets (for cloud deployment)."
+    )
+elif pdf_path and os.path.exists(pdf_path):
     try:
         pipeline = get_pipeline(pdf_path, doc_hash)
         doc_pages = pipeline.metrics.get("document_pages", 1)
@@ -250,7 +256,10 @@ if pdf_path and os.path.exists(pdf_path):
         if user_query:
             # Check 1: API Key availability
             if not active_key:
-                st.error("System API Key is not configured in the host environment. Queries cannot be processed.")
+                st.error(
+                    "GROQ_API_KEY is not configured in the host environment or Streamlit Secrets. "
+                    "Please add GROQ_API_KEY in Streamlit Cloud > App Settings > Secrets to enable responses."
+                )
                 st.stop()
 
             # Security Guardrail 1: Adversarial Prompt Injection & Boundary Check
@@ -365,5 +374,7 @@ if pdf_path and os.path.exists(pdf_path):
     except Exception as exc:
         logger.exception("Error initializing the RAG pipeline")
         st.error(f"Error initializing the RAG pipeline: {exc}")
+elif not active_key:
+    pass
 else:
     st.info("Please upload a PDF document in the sidebar to begin.")

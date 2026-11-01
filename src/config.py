@@ -39,6 +39,15 @@ class Settings:
 
     def __post_init__(self) -> None:
         self.GROQ_API_KEY = os.getenv("GROQ_API_KEY", self.GROQ_API_KEY).strip()
+        if not self.GROQ_API_KEY:
+            try:
+                import streamlit as st
+
+                if hasattr(st, "secrets") and "GROQ_API_KEY" in st.secrets:
+                    self.GROQ_API_KEY = str(st.secrets["GROQ_API_KEY"]).strip()
+                    os.environ["GROQ_API_KEY"] = self.GROQ_API_KEY
+            except Exception:
+                pass
         self.GROQ_MODEL = os.getenv("GROQ_MODEL", self.GROQ_MODEL).strip()
         self.CHROMA_DB_DIR = os.getenv("CHROMA_DB_DIR", self.CHROMA_DB_DIR)
         self.CHROMA_COLLECTION_NAME = os.getenv(
@@ -102,7 +111,10 @@ class Settings:
 
     def validate_runtime_configuration(self) -> None:
         if not self.GROQ_API_KEY:
-            raise ValueError("GROQ_API_KEY is not set in environment or .env file.")
+            raise ValueError(
+                "GROQ_API_KEY is not set in environment or .env file. "
+                "For Streamlit Cloud, add GROQ_API_KEY to App Settings > Secrets."
+            )
         if not self.GROQ_MODEL:
             raise ValueError("GROQ_MODEL is not set.")
         if not self.CHROMA_DB_DIR:
