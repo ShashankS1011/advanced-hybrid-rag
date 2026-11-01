@@ -59,8 +59,24 @@ def check_prompt_security(query: str, max_length: int = 500) -> SecurityCheckRes
 
 
 def sanitize_error_message(exc: Exception) -> str:
-    """Strips raw API keys, bearer tokens, and internal provider URLs from exception strings."""
+    """Strips raw API keys, bearer tokens, and internal provider URLs from exception strings,
+    and formats common authentication and quota errors with clear, actionable guidance."""
     raw = str(exc)
+    raw_lower = raw.lower()
+
+    if "invalid_api_key" in raw_lower or "invalid api key" in raw_lower or ("401" in raw and "auth" in raw_lower):
+        return (
+            "Authentication Error (401 - Invalid API Key): The Groq API key configured in the environment "
+            "is invalid, expired, or has been revoked. Please generate a new free API key at "
+            "https://console.groq.com/keys and update it in your .env file or Streamlit Cloud Secrets."
+        )
+
+    if "rate_limit_exceeded" in raw_lower or "429" in raw:
+        return (
+            "Rate Limit Reached (429): The Groq API rate limit has been exceeded. "
+            "Please wait a moment before trying again."
+        )
+
     # Mask Groq keys
     sanitized = re.sub(r"gsk_[A-Za-z0-9_-]{15,}", "gsk_***[REDACTED]***", raw)
     # Mask Bearer tokens

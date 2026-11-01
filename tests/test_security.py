@@ -46,10 +46,15 @@ def test_adversarial_prompt_injection_blocked(attack_query):
 
 
 def test_sanitize_error_message():
-    raw_error = (
-        "Failed to connect to Groq: Unauthorized gsk_1234567890abcdef1234567890 with Bearer secrettoken1234567890abcdef"
-    )
+    raw_error = "Connection timeout while calling host with gsk_1234567890abcdef1234567890 and Bearer secrettoken1234567890abcdef"
     sanitized = sanitize_error_message(Exception(raw_error))
     assert "gsk_1234567890abcdef1234567890" not in sanitized
     assert "gsk_***[REDACTED]***" in sanitized
     assert "secrettoken1234567890abcdef" not in sanitized
+
+
+def test_sanitize_error_message_invalid_api_key():
+    raw_error = "Error code: 401 - {'error': {'message': 'Invalid API Key', 'type': 'invalid_request_error', 'code': 'invalid_api_key'}}"
+    sanitized = sanitize_error_message(Exception(raw_error))
+    assert "Authentication Error (401 - Invalid API Key)" in sanitized
+    assert "console.groq.com" in sanitized
