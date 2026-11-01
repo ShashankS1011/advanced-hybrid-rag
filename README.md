@@ -16,11 +16,11 @@ The engine integrates **table-aware document ingestion**, **isolated hybrid retr
 
 ---
 
-## ⚡ Instant Live Web App
+## Instant Live Web App
 
 Access and test the full application immediately in your web browser without downloading or installing anything:
 
-👉 **[Launch Streamlit Live Web App](https://advanced-hybrid-rag.streamlit.app)**
+**[Launch Streamlit Live Web App](https://advanced-hybrid-rag.streamlit.app)**
 
 > **Quick Start in the Web App:**
 > 1. The demo is preloaded with a sample financial report (`financial_report.pdf`). You can start querying immediately or upload your own PDF in the sidebar.

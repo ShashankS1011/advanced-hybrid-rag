@@ -4,7 +4,7 @@ import os
 import re
 from pathlib import Path
 
-import fitz
+import pymupdf as fitz
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -87,6 +87,9 @@ class DocumentIngestor:
 
         doc_hash = compute_file_hash(resolved_path)
         pdf = fitz.open(resolved_path)
+        if pdf.is_encrypted:
+            pdf.close()
+            raise ValueError(f"Password-protected PDF files are not supported: {path.name}")
         documents: list[Document] = []
         try:
             page_count = pdf.page_count

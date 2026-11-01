@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from src.config import settings
 from src.pipeline import RAGPipeline
@@ -68,6 +68,14 @@ class QueryRequest(BaseModel):
     doc_id: str | None = Field(None, description="Document ID returned during upload")
     document_path: str | None = Field(None, description="Path or filename of PDF inside data/")
     chat_history: list[Message] = Field(default_factory=list, description="Prior conversation turns")
+
+    @field_validator("question")
+    @classmethod
+    def validate_question(cls, v: str) -> str:
+        clean = v.strip()
+        if not clean:
+            raise ValueError("Question cannot be empty or whitespace.")
+        return clean
 
 
 class SourceItem(BaseModel):

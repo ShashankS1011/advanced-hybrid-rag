@@ -103,3 +103,13 @@ def test_query_rejects_path_traversal():
     }
     response = client.post("/query", json=payload)
     assert response.status_code == 400
+
+
+def test_query_rejects_empty_question():
+    payload = {
+        "question": "   ",
+        "doc_id": "nonexistent",
+        "chat_history": [],
+    }
+    response = client.post("/query", json=payload)
+    assert response.status_code == 422

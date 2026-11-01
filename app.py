@@ -25,7 +25,7 @@ if not settings.GROQ_API_KEY:
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-st.set_page_config(page_title="Production Hybrid RAG Engine", page_icon="⚡", layout="wide")
+st.set_page_config(page_title="Production Hybrid RAG Engine", layout="wide")
 
 st.title("Advanced Production RAG (FlashRank Reranked + Streaming)")
 st.caption("Powered by BM25, Chroma Vector Search, FlashRank Cross-Encoder, and Groq Llama 3")
@@ -44,7 +44,7 @@ with st.sidebar:
             os.environ["GROQ_API_KEY"] = api_input.strip()
             st.rerun()
     else:
-        st.success("Groq API Key configured", icon="✅")
+        st.success("Groq API Key configured")
 
     st.markdown("---")
     st.header("Document Management")
@@ -89,7 +89,7 @@ with st.sidebar:
 
 def validate_startup() -> bool:
     if not settings.GROQ_API_KEY:
-        st.info("👈 Enter your free **Groq API Key** in the sidebar (or configure secrets) to begin chatting!")
+        st.info("Enter your free **Groq API Key** in the sidebar (or configure secrets) to begin chatting.")
         return False
     try:
         settings.validate_runtime_configuration()
