@@ -12,7 +12,7 @@
 
 An enterprise-grade, retrieval-augmented generation (RAG) system engineered for high-precision, explainable document question answering over complex PDFs (financial reports, legal filings, technical whitepapers, contracts).
 
-The engine integrates **table-aware document ingestion**, **isolated hybrid retrieval (BM25 + Chroma Vector Search)**, **FlashRank cross-encoder reranking**, **conversational query condensation**, and **in-text citation grounding** powered by **Groq Llama 3**. It offers both an interactive **Streamlit UI** and a production-ready **FastAPI REST & Server-Sent Events (SSE) streaming API**.
+The engine integrates **table-aware document ingestion**, **isolated hybrid retrieval (BM25 + Chroma Vector Search)**, **FlashRank cross-encoder reranking**, **conversational query condensation**, **multi-layered API security guardrails**, and **in-text citation grounding** powered by **Groq Llama 3**. It offers both an interactive **Streamlit UI** and a production-ready **FastAPI REST & Server-Sent Events (SSE) streaming API**.
 
 ---
 
@@ -24,8 +24,8 @@ Access and test the full application immediately in your web browser without dow
 
 > **Quick Start in the Web App:**
 > 1. The demo is preloaded with a sample financial report (`financial_report.pdf`). You can start querying immediately or upload your own PDF in the sidebar.
-> 2. The application uses the secured host environment API key with built-in guardrails (daily quota, request cooldown, and adversarial injection filtering).
-> 3. To deploy your own private copy in 1 click for free:
+> 2. The system operates using the secured host environment API key with multi-layered guardrails (adversarial prompt filtering, daily quota protection, and cooldown rate limiting).
+> 3. To deploy your own private copy in 1 click:
 >
 > [![Deploy to Streamlit Cloud](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/deploy?repository=ShashankS1011/advanced-hybrid-rag&branch=main&mainModule=app.py)
 
@@ -35,7 +35,8 @@ Access and test the full application immediately in your web browser without dow
 
 ```mermaid
 flowchart TD
-    User([User Question + History]) --> Condenser[Conversational Query Condenser]
+    User([User Question + History]) --> Security[API & Prompt Security Guardrails]
+    Security --> Condenser[Conversational Query Condenser]
     Condenser --> |Standalone Query| Retrieval[Hybrid Retrieval Engine]
     
     subgraph Ingestion [Ingestion & Indexing]
@@ -69,11 +70,18 @@ flowchart TD
 - **Score-Filtered BM25:** Filters zero-score keyword matches to prevent non-matching documents from degrading hybrid search precision.
 - **Cross-Encoder Reranking:** Reorders retrieved candidate chunks using `FlashRank` (`ms-marco-TinyBERT-L-2-v2`) for superior semantic relevance before LLM context injection.
 - **Conversational Memory:** Uses chat history to reformulate ambiguous follow-up questions into self-contained search queries before retrieval.
+- **Multi-Layered API Security & Guardrails:**
+  - **Adversarial Injection Filtering:** Heuristic regex inspection blocks prompt injections, jailbreaks (`DAN mode`), and system prompt leakage attempts before consuming LLM tokens.
+  - **Payload Bounds Enforcement:** Strict validation rejects empty, sub-minimum, or oversized queries (>500 characters).
+  - **Duplicate Request Debounce:** Prevents rapid re-submission spamming.
+  - **Rate Limiting & Cooldown:** Enforces minimum request intervals (2.5s) per session.
+  - **Cost & Quota Caps:** Caps per-session queries (25 max) and enforces daily global budget ceilings (150 max).
+  - **Credential Leakage Prevention:** Strips API keys (`gsk_...`), bearer tokens, and internal paths from all user-facing error messages.
 - **Strict In-Text Citations:** Enforces bracketed source references (e.g. `[Page 2]`) directly after every factual statement in the generated answer.
 - **Dual Interfaces:**
   - **Streamlit Web UI:** Chat interface with dynamic parameter sliders, chunk inspection, and history management.
   - **FastAPI REST & Streaming Service:** Fully decoupled backend providing `/upload`, `/query`, and `/stream` (SSE) endpoints.
-- **Automated RAG Evaluation:** Built-in benchmarking suite (`src/evaluate.py`) for citation accuracy, lexical overlap, and Ragas metrics.
+- **Automated RAG Evaluation:** Built-in benchmarking suite (`src/evaluate.py`) for citation accuracy, lexical overlap, and retrieval hit-rate metrics.
 - **Dockerized Deployment:** Ready-to-deploy multi-stage `Dockerfile` and `docker-compose.yml`.
 
 ---
@@ -88,11 +96,13 @@ flowchart TD
 │   ├── ingest.py          # Table-aware PDF parsing & chunking
 │   ├── retriever.py       # Hybrid BM25 + Chroma retriever with FlashRank
 │   ├── pipeline.py        # Conversational RAG pipeline orchestration & streaming
+│   ├── security.py        # Prompt injection filter, rate limiting & error sanitization
 │   ├── evaluate.py        # Automated RAG evaluation & benchmarking suite
 │   └── api.py             # FastAPI REST & SSE streaming server
 ├── tests/
 │   ├── test_core.py       # Unit tests for settings, ingestion, and retrievers
 │   ├── test_pipeline.py   # Tests for pipeline orchestration, memory, and evaluation
+│   ├── test_security.py   # Tests for prompt injection defense & sanitization
 │   └── test_api.py        # Integration tests for FastAPI endpoints
 ├── data/                  # PDF storage directory
 ├── app.py                 # Interactive Streamlit web application
@@ -153,7 +163,7 @@ Copy the `.env.example` file to `.env`:
 cp .env.example .env
 ```
 
-Set your credentials in `.env`:
+Set your credentials and parameters in `.env`:
 
 ```env
 GROQ_API_KEY=gsk_your_groq_api_key_here
@@ -172,6 +182,14 @@ DENSE_WEIGHT=0.5
 SPARSE_WEIGHT=0.5
 RERANK_TOP_N=4
 TEMPERATURE=0.1
+SCORE_THRESHOLD=0.0
+MAX_OUTPUT_TOKENS=1024
+
+# Security Guardrails & Rate Limits
+MAX_QUERY_LENGTH=500
+MAX_SESSION_QUERIES=25
+RATE_LIMIT_SECONDS=2.5
+DAILY_GLOBAL_QUERY_LIMIT=150
 ```
 
 ---
@@ -186,10 +204,16 @@ Launch and interact with the system directly from your web browser without downl
 
   [![Deploy to Streamlit Cloud](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/deploy?repository=ShashankS1011/advanced-hybrid-rag&branch=main&mainModule=app.py)
 
-*(Optional) Configure your Groq API key in **App Settings > Secrets**:*
-```toml
-GROQ_API_KEY = "gsk_your_groq_api_key_here"
-```
+#### Configuring Your Key on Streamlit Cloud (1-Time Setup):
+To allow your deployed Streamlit Cloud application to query the LLM automatically:
+1. Open your [Streamlit Cloud Dashboard](https://share.streamlit.io/).
+2. Click the three dots (`...`) next to your deployed application and select **Settings**.
+3. Navigate to the **Secrets** tab in the left menu.
+4. Add your Groq API key:
+   ```toml
+   GROQ_API_KEY = "gsk_your_groq_api_key_here"
+   ```
+5. Click **Save**. The app will immediately bind the secret and activate querying.
 
 ### Option B: Local Streamlit Web UI
 
@@ -282,7 +306,7 @@ Lexical Overlap Score:    78.40%
 
 ## Running Automated Tests
 
-Run the full automated test suite (unit tests, integration tests, and API tests):
+Run the full automated test suite (unit tests, integration tests, and security tests):
 
 ```bash
 python -m pytest
