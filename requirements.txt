@@ -1,4 +1,5 @@
 # Core Framework & LLM
+pysqlite3-binary; sys_platform == 'linux'
 langchain>=1.4.7
 langchain-community>=0.2.0
 langchain-core>=0.2.0

@@ -1,8 +1,16 @@
 import logging
 import re
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
+
+# Ensure modern SQLite3 on Linux / Streamlit Community Cloud for ChromaDB
+try:
+    __import__("pysqlite3")
+    sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
+except ImportError:
+    pass
 
 from langchain_chroma import Chroma
 

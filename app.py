@@ -1,6 +1,14 @@
 import logging
 import os
+import sys
 from pathlib import Path
+
+# Workaround for ChromaDB requiring SQLite >= 3.35.0 on Linux (Streamlit Community Cloud)
+try:
+    __import__("pysqlite3")
+    sys.modules["sqlite3"] = sys.modules.pop("pysqlite3")
+except ImportError:
+    pass
 
 # CPU Thread Optimization
 os.environ["OMP_NUM_THREADS"] = "2"
@@ -11,7 +19,8 @@ import streamlit as st
 
 from src.config import settings
 from src.ingest import compute_file_hash
-from src.pipeline import RAGPipeline
+
+st.set_page_config(page_title="Production Hybrid RAG Engine", layout="wide")
 
 # Synchronize Streamlit Cloud secrets if available
 if not settings.GROQ_API_KEY:
@@ -24,8 +33,6 @@ if not settings.GROQ_API_KEY:
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
-
-st.set_page_config(page_title="Production Hybrid RAG Engine", layout="wide")
 
 st.title("Advanced Production RAG (FlashRank Reranked + Streaming)")
 st.caption("Powered by BM25, Chroma Vector Search, FlashRank Cross-Encoder, and Groq Llama 3")
@@ -100,20 +107,24 @@ def validate_startup() -> bool:
         return False
 
 
+BASE_DIR = Path(__file__).resolve().parent
+default_pdf = BASE_DIR / "data" / "financial_report.pdf"
 pdf_path = None
 doc_hash = ""
 
 if uploaded_file is not None:
-    os.makedirs("data", exist_ok=True)
+    data_dir = BASE_DIR / "data"
+    data_dir.mkdir(parents=True, exist_ok=True)
     # Sanitize uploaded filename to prevent directory traversal
     safe_name = Path(uploaded_file.name).name
-    pdf_path = os.path.join("data", safe_name)
-    with open(pdf_path, "wb") as f:
+    target_file = data_dir / safe_name
+    with open(target_file, "wb") as f:
         f.write(uploaded_file.getbuffer())
+    pdf_path = str(target_file)
     doc_hash = compute_file_hash(pdf_path)
     st.sidebar.success(f"Active file: `{safe_name}` (ID: `{doc_hash}`)")
-elif os.path.exists("data/financial_report.pdf"):
-    pdf_path = "data/financial_report.pdf"
+elif default_pdf.exists():
+    pdf_path = str(default_pdf)
     doc_hash = compute_file_hash(pdf_path)
     st.sidebar.info("Preloaded document: `financial_report.pdf` active")
 
@@ -127,6 +138,8 @@ for message in st.session_state.messages:
 
 @st.cache_resource(show_spinner="Indexing document and initializing FlashRank reranker...")
 def get_pipeline(path: str, content_hash: str):
+    from src.pipeline import RAGPipeline
+
     return RAGPipeline(path)
 
 
