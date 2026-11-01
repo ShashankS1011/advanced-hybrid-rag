@@ -127,4 +127,3 @@ def test_evaluate_rag_pipeline_runner(mock_pipeline):
         assert report.citation_accuracy == 1.0
         assert report.context_coverage == 1.0
         assert report.lexical_similarity > 0.5
-

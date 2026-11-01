@@ -13,15 +13,40 @@ from src.config import settings
 from src.ingest import compute_file_hash
 from src.pipeline import RAGPipeline
 
+# Synchronize Streamlit Cloud secrets if available
+if not settings.GROQ_API_KEY:
+    try:
+        if hasattr(st, "secrets") and "GROQ_API_KEY" in st.secrets:
+            settings.GROQ_API_KEY = str(st.secrets["GROQ_API_KEY"]).strip()
+            os.environ["GROQ_API_KEY"] = settings.GROQ_API_KEY
+    except Exception:
+        pass
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-st.set_page_config(page_title="Production Hybrid RAG Engine", layout="wide")
+st.set_page_config(page_title="Production Hybrid RAG Engine", page_icon="⚡", layout="wide")
 
 st.title("Advanced Production RAG (FlashRank Reranked + Streaming)")
 st.caption("Powered by BM25, Chroma Vector Search, FlashRank Cross-Encoder, and Groq Llama 3")
 
 with st.sidebar:
+    st.header("API Configuration")
+    if not settings.GROQ_API_KEY:
+        api_input = st.text_input(
+            "Groq API Key",
+            type="password",
+            placeholder="gsk_...",
+            help="Free Groq API key from https://console.groq.com",
+        )
+        if api_input:
+            settings.GROQ_API_KEY = api_input.strip()
+            os.environ["GROQ_API_KEY"] = api_input.strip()
+            st.rerun()
+    else:
+        st.success("Groq API Key configured", icon="✅")
+
+    st.markdown("---")
     st.header("Document Management")
     uploaded_file = st.file_uploader("Upload a PDF Document", type=["pdf"])
 
@@ -63,6 +88,9 @@ with st.sidebar:
 
 
 def validate_startup() -> bool:
+    if not settings.GROQ_API_KEY:
+        st.info("👈 Enter your free **Groq API Key** in the sidebar (or configure secrets) to begin chatting!")
+        return False
     try:
         settings.validate_runtime_configuration()
         return True
@@ -83,10 +111,11 @@ if uploaded_file is not None:
     with open(pdf_path, "wb") as f:
         f.write(uploaded_file.getbuffer())
     doc_hash = compute_file_hash(pdf_path)
-    st.sidebar.success(f"File active: `{safe_name}` (ID: `{doc_hash}`)")
+    st.sidebar.success(f"Active file: `{safe_name}` (ID: `{doc_hash}`)")
 elif os.path.exists("data/financial_report.pdf"):
     pdf_path = "data/financial_report.pdf"
     doc_hash = compute_file_hash(pdf_path)
+    st.sidebar.info("Preloaded document: `financial_report.pdf` active")
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -102,7 +131,6 @@ def get_pipeline(path: str, content_hash: str):
 
 
 if not validate_startup():
-    st.info("Set GROQ_API_KEY and GROQ_MODEL in your environment or .env file to enable generation.")
     st.stop()
 
 if pdf_path and os.path.exists(pdf_path):
@@ -154,19 +182,27 @@ if pdf_path and os.path.exists(pdf_path):
                     pages_str = ", ".join([f"Page {p}" for p in pages])
                     source_files = sorted({s["file"] for s in sources_info})
                     files_str = ", ".join([f"`{f}`" for f in source_files])
-                    citation_footer = f"\n\n**Sources:** {files_str} ({pages_str})" if sources_info else "\n\n**Sources:** `Document` (N/A)"
+                    citation_footer = (
+                        f"\n\n**Sources:** {files_str} ({pages_str})"
+                        if sources_info
+                        else "\n\n**Sources:** `Document` (N/A)"
+                    )
                     st.markdown(citation_footer)
 
                     with st.expander("Inspect Re-ranked Search Chunks & FlashRank Scores"):
                         for idx, s in enumerate(sources_info, 1):
-                            st.markdown(f"**Chunk #{idx} | {s['file']} | Page {s['page']} | Relevance Score: `{s['score']}`**")
+                            st.markdown(
+                                f"**Chunk #{idx} | {s['file']} | Page {s['page']} | Relevance Score: `{s['score']}`**"
+                            )
                             st.caption(s["text"][:300] + "...")
                             st.divider()
 
-                    st.session_state.messages.append({
-                        "role": "assistant",
-                        "content": full_answer + citation_footer,
-                    })
+                    st.session_state.messages.append(
+                        {
+                            "role": "assistant",
+                            "content": full_answer + citation_footer,
+                        }
+                    )
                 except Exception as exc:
                     logger.exception("Search or generation failed")
                     error_text = f"Search or generation failed: {exc}"

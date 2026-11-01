@@ -45,9 +45,7 @@ class BM25RetrieverAdapter:
             return []
 
         scores = self.bm25.get_scores(tokenized_query)
-        scored_pairs = [
-            (idx, score) for idx, score in enumerate(scores) if score > 0.0
-        ]
+        scored_pairs = [(idx, score) for idx, score in enumerate(scores) if score > 0.0]
         if not scored_pairs:
             return []
 
@@ -134,7 +132,9 @@ class HybridRetrieverBuilder:
                 base_compressor=compressor,
                 base_retriever=ensemble,
             )
-            logger.info("Hybrid + FlashRank retriever initialized successfully for collection: %s", self.collection_name)
+            logger.info(
+                "Hybrid + FlashRank retriever initialized successfully for collection: %s", self.collection_name
+            )
             return compression_retriever
         except Exception as exc:  # pragma: no cover - exercised in runtime integration
             logger.warning("FlashRank reranking failed, using hybrid fallback retriever. Error: %s", exc)

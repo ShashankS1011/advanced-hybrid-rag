@@ -1,0 +1,5 @@
+# Optional Evaluation & Benchmarking Dependencies (Ragas)
+# Install via: pip install -r requirements-eval.txt
+ragas>=0.1.0
+datasets>=5.1.0
+

@@ -176,12 +176,14 @@ class RAGPipeline:
 
         sources = []
         for doc in retrieved_docs:
-            sources.append({
-                "file": doc.metadata.get("source_file", "Document"),
-                "page": doc.metadata.get("page_number", 1),
-                "score": getattr(doc, "relevance_score", None),
-                "text": doc.page_content,
-            })
+            sources.append(
+                {
+                    "file": doc.metadata.get("source_file", "Document"),
+                    "page": doc.metadata.get("page_number", 1),
+                    "score": getattr(doc, "relevance_score", None),
+                    "text": doc.page_content,
+                }
+            )
 
         formatted_context = self._format_docs(retrieved_docs)
         chain = QA_SYSTEM_PROMPT | self.llm | StrOutputParser()

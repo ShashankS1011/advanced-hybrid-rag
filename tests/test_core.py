@@ -161,7 +161,9 @@ def test_document_ingestor_can_parse_a_real_pdf(tmp_path):
         temp_path = temp_pdf.name
 
     try:
-        pdf_document = Document(page_content="Revenue grew by 20 percent in Q4.", metadata={"source": temp_path, "page": 0})
+        pdf_document = Document(
+            page_content="Revenue grew by 20 percent in Q4.", metadata={"source": temp_path, "page": 0}
+        )
         ingestor = DocumentIngestor(chunk_size=80, chunk_overlap=20)
         chunks = ingestor.chunk_documents([pdf_document])
 

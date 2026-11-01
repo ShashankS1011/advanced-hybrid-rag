@@ -74,7 +74,9 @@ def test_stream_endpoint_with_mock_pipeline():
     mock_pipe.document_path = "data/financial_report.pdf"
     mock_pipe.metrics = {"document_pages": 1, "chunks_created": 2}
 
-    sample_doc = Document(page_content="Cash reserves: $22.0M", metadata={"page_number": 1, "source_file": "report.pdf"})
+    sample_doc = Document(
+        page_content="Cash reserves: $22.0M", metadata={"page_number": 1, "source_file": "report.pdf"}
+    )
     mock_pipe.retrieve_chunks = MagicMock(return_value=[sample_doc])
     mock_pipe.stream_answer = MagicMock(return_value=iter(["Cash ", "reserves: ", "$22.0M"]))
 
@@ -101,5 +103,3 @@ def test_query_rejects_path_traversal():
     }
     response = client.post("/query", json=payload)
     assert response.status_code == 400
-
-

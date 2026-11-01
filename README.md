@@ -1,6 +1,7 @@
 # Advanced Production Hybrid RAG Engine
 
 [![CI](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/ci.yml)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://advanced-hybrid-rag.streamlit.app)
 [![CodeQL Analysis](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/codeql.yml/badge.svg)](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/codeql.yml)
 [![Lint & Quality](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/lint.yml/badge.svg)](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/lint.yml)
 [![Docker Build](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/docker.yml/badge.svg)](https://github.com/ShashankS1011/advanced-hybrid-rag/actions/workflows/docker.yml)
@@ -12,6 +13,21 @@
 An enterprise-grade, retrieval-augmented generation (RAG) system engineered for high-precision, explainable document question answering over complex PDFs (financial reports, legal filings, technical whitepapers, contracts).
 
 The engine integrates **table-aware document ingestion**, **isolated hybrid retrieval (BM25 + Chroma Vector Search)**, **FlashRank cross-encoder reranking**, **conversational query condensation**, and **in-text citation grounding** powered by **Groq Llama 3**. It offers both an interactive **Streamlit UI** and a production-ready **FastAPI REST & Server-Sent Events (SSE) streaming API**.
+
+---
+
+## ⚡ Instant Live Web App
+
+Access and test the full application immediately in your web browser without downloading or installing anything:
+
+👉 **[Launch Streamlit Live Web App](https://advanced-hybrid-rag.streamlit.app)**
+
+> **Quick Start in the Web App:**
+> 1. The demo is preloaded with a sample financial report (`financial_report.pdf`). You can start querying immediately or upload your own PDF in the sidebar.
+> 2. Paste your free [Groq API Key](https://console.groq.com) into the sidebar configuration (or set it in Streamlit Cloud secrets).
+> 3. To deploy your own private copy in 1 click for free:
+>
+> [![Deploy to Streamlit Cloud](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/deploy?repository=ShashankS1011/advanced-hybrid-rag&branch=main&mainModule=app.py)
 
 ---
 
@@ -80,10 +96,13 @@ flowchart TD
 │   └── test_api.py        # Integration tests for FastAPI endpoints
 ├── data/                  # PDF storage directory
 ├── app.py                 # Interactive Streamlit web application
+├── .streamlit/
+│   └── config.toml        # Production UI theme & server configuration
 ├── Dockerfile             # Multi-stage production container build
 ├── docker-compose.yml     # Multi-container orchestration (UI + API)
 ├── pyproject.toml         # Pytest & package build configuration
 ├── requirements.txt       # Production dependencies
+├── requirements-eval.txt  # Optional evaluation & benchmarking dependencies
 ├── .env.example           # Environment configuration template
 └── README.md              # Project documentation
 ```
@@ -159,7 +178,20 @@ TEMPERATURE=0.1
 
 ## Running the Application
 
-### Option A: Streamlit Web UI
+### Option A: Streamlit Cloud (Zero Setup)
+
+Launch and interact with the system directly from your web browser without downloading or installing any dependencies:
+- **Direct Live App:** [advanced-hybrid-rag.streamlit.app](https://advanced-hybrid-rag.streamlit.app)
+- **1-Click Deploy:** Click below to deploy your own instance on Streamlit Community Cloud:
+
+  [![Deploy to Streamlit Cloud](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/deploy?repository=ShashankS1011/advanced-hybrid-rag&branch=main&mainModule=app.py)
+
+*(Optional) Configure your Groq API key in **App Settings > Secrets**:*
+```toml
+GROQ_API_KEY = "gsk_your_groq_api_key_here"
+```
+
+### Option B: Local Streamlit Web UI
 
 ```bash
 streamlit run app.py
@@ -170,7 +202,7 @@ Access the application at `http://localhost:8501`.
 2. Adjust retrieval depth and temperature sliders in real time.
 3. Chat with the document and inspect reranked candidate chunks with cross-encoder relevance scores.
 
-### Option B: FastAPI Backend
+### Option C: FastAPI Backend
 
 Start the API server with Uvicorn:
 
