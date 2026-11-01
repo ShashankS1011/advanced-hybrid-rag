@@ -17,7 +17,7 @@ reportlab>=4.0.0
 # Hybrid Search & Reranking
 rank_bm25>=0.2.2
 sentence-transformers>=6.2.0
-flashrank>=0.2.0
+flashrank>=0.2.10
 
 # API & Web UI
 fastapi>=0.110.0
